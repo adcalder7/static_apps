@@ -1766,13 +1766,25 @@
       }
       // Find the node data by matching label -> feed.js uses labels as keys when parsed
       const data = (window.feedData && window.feedData[nodeLabel]) ? window.feedData[nodeLabel] : null;
-      if (!data || !data.NodeLogic) {
-        el.textContent = 'No logic available for ' + formatNodeLabel(nodeLabel) + '.';
-        const lbl = document.getElementById('logic_toolbar_label'); if (lbl) lbl.textContent = '—';
-        return;
-      }
-      el.textContent = data.NodeLogic;
+      // We no longer read NodeLogic from feed.js. Instead the pseudocode (logic) comes from
+      // the corresponding section file: sections/section_<id>.js which sets
+      // window.SECTIONS[<id>] = { notes, completed, logic }.
       const lbl = document.getElementById('logic_toolbar_label'); if (lbl) lbl.textContent = formatNodeLabel(nodeLabel);
+
+      // Try to use any already-loaded section logic synchronously; otherwise show a helpful message
+      try {
+        const fd = (window.feedData && window.feedData[nodeLabel]) ? window.feedData[nodeLabel] : null;
+        const numericId = fd && fd.id ? fd.id : nodeLabel;
+        const sid = String(numericId);
+        const sec = (window.__loadedSections && window.__loadedSections[sid]) ? window.__loadedSections[sid] : ((window.SECTIONS && window.SECTIONS[sid]) ? window.SECTIONS[sid] : null);
+        if (sec && typeof sec.logic === 'string') {
+          el.textContent = sec.logic;
+        } else {
+          el.textContent = 'Could not find data in the section...';
+        }
+        } catch (e) {
+        el.textContent = 'Could not find data in the section...';
+      }
 
       // Load corresponding section file dynamically (classic <script> injection). The section files
       // live in ./sections/section_<id>.js and set window.SECTIONS["<id>"] = { notes, completed }.
@@ -1795,7 +1807,7 @@
                 notesEl.textContent = sec.notes;
               } else if (sec && typeof sec.notes === 'undefined') {
                 // Section file loaded but provides no notes field
-                notesEl.textContent = 'No notes available for ' + formatNodeLabel(id) + '.';
+                notesEl.textContent = 'Could not find data in the section...';
               }
             }
             // update completed state in memory so renderers pick it up
@@ -1811,6 +1823,13 @@
               drawTop();
               if (isVisible(panelLayered)) drawLayers();
             }
+            // If the section provides 'logic' (pseudocode), update the Node Logic pane
+            try {
+              if (sec && typeof sec.logic === 'string') {
+                const elLogic = document.getElementById('node-logic-code');
+                if (elLogic) elLogic.textContent = sec.logic;
+              }
+            } catch (e) { /* noop */ }
           } catch (e) { /* noop */ }
         }
 
@@ -1827,9 +1846,16 @@
           return;
         }
 
-        // Inject script tag to load sections/section_<sid>.js
+        // Force refresh: remove any cached entries for this sid so we always re-read file
+        if (true) {
+          try { if (window.__loadedSections) delete window.__loadedSections[sid]; } catch(e) { /* noop */ }
+          try { if (window.SECTIONS) delete window.SECTIONS[sid]; } catch(e) { /* noop */ }
+          window.__loadedSections = window.__loadedSections || {};
+          window.SECTIONS = window.SECTIONS || {};
+        }
+        // Inject script tag to load sections/section_<sid>.js with a cache-busting query param
         const script = document.createElement('script');
-        script.src = `sections/section_${sid}.js`;
+        script.src = `sections/section_${sid}.js?cb=${Date.now()}`;
         script.async = true;
         // on load, copy the exported object from window.SECTIONS
         script.onload = () => {
@@ -1842,7 +1868,7 @@
         script.onerror = () => {
           // If file is not found or error occurred, ensure Notes pane shows a helpful message
           const notesEl = document.getElementById('node-logic-alt');
-          if (notesEl) notesEl.textContent = 'No notes available for ' + formatNodeLabel(nodeLabel) + '.';
+          if (notesEl) notesEl.textContent = 'Could not find data in the section...';
         };
         document.head.appendChild(script);
       })(nodeLabel);
