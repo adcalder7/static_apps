@@ -1,0 +1,2475 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Adjacency Graph — Tabs</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html, body { height: 100%; margin: 0; font-family: system-ui, Arial, sans-serif; background: #0b0f14; color: #e8eef5; }
+    header { padding: 12px 16px; border-bottom: 1px solid #1c2633; display: flex; align-items: center; gap: 12px; }
+    .badge { padding: 2px 8px; border-radius: 999px; background: #16202c; color: #9fb3c8; font-size: 12px; }
+
+  /* Layout */
+  /* three columns: left pane, splitter, right content */
+  #wrap { display: grid; grid-template-columns: 320px 8px 1fr; gap: 0; height: calc(100% - 50px); }
+
+    /* Splitter between left panel and main area */
+    .splitter {
+      width: 8px;
+      cursor: col-resize;
+      background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00));
+      position: relative;
+      z-index: 50;
+      /* ensure splitter occupies its grid column fully */
+      height: 100%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .splitter:hover { background: linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.00)); }
+    .splitter .handle {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 2px;
+      height: 48px;
+      background: rgba(160,180,200,0.06);
+      border-radius: 2px;
+    }
+
+    /* Left panel */
+    aside#panel {
+      padding: 12px 16px;
+      border-right: 1px solid #1c2633;
+      overflow-y: auto;
+      overflow-x: hidden; /* remove horizontal scrollbar */
+      box-sizing: border-box;
+      min-width: 160px;
+      max-width: 70vw;
+    }
+    /* hide native scrollbar visuals for left panel; we'll provide drag-to-scroll */
+    aside#panel { scrollbar-width: none; -ms-overflow-style: none; }
+    aside#panel::-webkit-scrollbar { width: 0; height: 0; }
+    aside#panel.dragging { cursor: grabbing; }
+    #panel h2 { margin: 10px 0 8px; font-size: 16px; color: #cfe0f5; }
+
+    /* Node list */
+  #node-list { list-style: none; padding: 0; margin: 6px 0 12px 0; }
+  #node-list li { padding: 6px 8px; border-radius: 6px; color: #cfe0f5; cursor: pointer; display: block; }
+  #node-list li .node-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; }
+    #node-list .toggle, #node-list .small { flex-shrink: 0; }
+  #node-list li .label { flex: 1 1 auto; white-space: nowrap; pointer-events: none; overflow: hidden; text-overflow: ellipsis; }
+    #node-list li:hover { background: rgba(155,190,240,0.08); color: #fff; }
+    #node-list li .small { color: #8aa4bd; font-size: 12px; margin-left: 8px; }
+    .toggle { background: transparent; border: none; color: #7ea9cf; font-size: 12px; cursor: pointer; padding: 0 4px; }
+    .children { list-style: none; padding-left: 18px; margin: 6px 0 0 0; display: none; }
+    .children.expanded { display: block; }
+    .selected { background: rgba(80,180,255,0.10); color: #bfe8ff; border-left: 3px solid rgba(80,180,255,0.25); padding-left: 6px; }
+
+    .hint { color: #8aa4bd; font-size: 12px; }
+    a { color: #9dc1ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Main / Tabs */
+    main { overflow: hidden; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+    .tabs { display: flex; gap: 8px; border-bottom: 1px solid #1c2633; padding: 0 4px 8px; }
+    .tab-btn {
+      appearance: none;
+      border: 1px solid #1c2633;
+      background: #0e1722;
+      color: #cfe0f5;
+      padding: 8px 12px;
+      border-top-left-radius: 8px;
+      border-top-right-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .tab-btn[aria-selected="true"] {
+      background: #122033;
+      border-bottom-color: #122033;
+      color: #fff;
+      box-shadow: inset 0 -2px 0 0 #122033;
+    }
+    .tab-panels { position: relative; flex: 1 1 auto; }
+    .tab-panel {
+      display: none;
+      height: 78vh;            /* visible area for the active panel */
+      background: #071018;
+      border: 1px solid #1c2633;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .tab-panel[data-active="true"] { display: block; }
+
+    /* Graph containers inside panels */
+  .graph-wrap { height: 100%; box-sizing: border-box; position: relative; padding-top: 56px; }
+    .drag-scroll {
+      overflow: auto;
+      position: relative;
+      height: 100%;
+      -webkit-overflow-scrolling: touch;
+      cursor: grab;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .drag-scroll.dragging { cursor: grabbing; }
+    .drag-scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+    /* Shared panel toolbar (left-aligned) */
+    .panel-toolbar {
+      left: 12px;
+      top: 12px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      position: absolute;
+    }
+    .panel-toolbar button {
+      background: rgba(8,18,26,0.7);
+      color: #dfeaf6;
+      border: 1px solid rgba(130,160,190,0.12);
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .panel-toolbar button:hover {
+      background: rgba(60,100,140,0.14);
+      color: #ffffff;
+      border-color: rgba(100,150,200,0.18);
+    }
+    .panel-toolbar button:active,
+    .panel-toolbar button.pressed {
+      background: rgba(70,130,200,0.26);
+      color: #ffffff;
+      border-color: rgba(80,160,230,0.35);
+      box-shadow: 0 0 0 2px rgba(80,160,230,0.06) inset;
+      transform: translateY(1px);
+    }
+    .panel-toolbar button:focus {
+      outline: 2px solid rgba(80,160,230,0.12);
+      outline-offset: 2px;
+    }
+    .panel-toolbar .toolbar-label {
+      color: #bfe8ff;
+      font-size: 13px;
+      margin-right: 8px;
+      padding: 6px 8px;
+      white-space: nowrap;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .panel-toolbar button[aria-pressed="true"] {
+      background: rgba(70,130,200,0.18);
+      color: #fff;
+      border-color: rgba(80,160,230,0.25);
+      box-shadow: 0 0 0 2px rgba(80,160,230,0.06) inset;
+    }
+
+    /* Layered toolbar uses shared panel-toolbar styles */
+  .layered-toolbar { position: absolute; }
+
+    /* Canvases */
+    canvas { display: block; width: 100%; height: 100%; border-radius: 6px; background: linear-gradient(180deg,#051017, #071726); }
+
+    /* Node Logic code block */
+    .code-block {
+      background: linear-gradient(180deg,#04121a,#07202a);
+      border: 1px solid rgba(120,150,180,0.08);
+      padding: 12px;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+      font-size: 13px;
+      color: #dff3ff;
+      overflow: auto;
+      user-select: text; /* allow highlighting/copying */
+      white-space: pre; /* preserve whitespace and allow horizontal scroll */
+      max-height: 60vh;
+    }
+
+    /* Search input styles and highlight marker */
+    .search-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(120,150,180,0.08);
+      background: rgba(6,12,16,0.6);
+      color: #e8f6ff;
+      font-size: 13px;
+    }
+    .search-input::placeholder { color: #7f98ab; }
+    .highlight { background: rgba(255,236,128,0.18); color: #fff; border-radius: 2px; padding: 0 2px; }
+
+    /* Node Meta list */
+  .meta-list { margin-top: 6px; overflow: auto; max-height: 60vh; }
+    /* selected table highlight */
+    .table-selected { background: rgba(80,160,255,0.12); border-left: 3px solid rgba(80,160,255,0.22); padding-left: 6px; }
+    /* simple context menu for tables */
+    #tables-context-menu { position: absolute; display:none; z-index:1200; background:#071018; border:1px solid #1c2633; padding:6px; border-radius:6px; }
+    #tables-context-menu button { background:transparent; border:none; color:#cfe0f5; padding:6px 10px; cursor:pointer; }
+    .meta-item { margin: 6px 0; }
+    /* toggle shows triangle indicator and expanded by default */
+    .meta-toggle {
+      appearance: none; background: transparent; border: 1px solid rgba(120,150,180,0.08);
+      color: #cfe0f5; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      display: inline-flex; gap: 8px; align-items: center;
+    }
+    .meta-toggle::before {
+      content: '\25BC'; /* down-pointing triangle */
+      display: inline-block;
+      width: 14px;
+      text-align: center;
+      color: #9fb3c8;
+      transform: translateY(0);
+      transition: transform 120ms ease-in-out, color 120ms;
+    }
+    .meta-toggle[aria-expanded="false"]::before { content: '\25B6'; /* right-pointing triangle */ }
+    .meta-toggle[aria-expanded="true"] { background: rgba(70,130,200,0.12); border-color: rgba(80,160,230,0.14); }
+    .meta-cols { list-style: none; padding-left: 20px; margin: 6px 0 0 0; color: #bfe8ff; font-size: 13px; }
+    .meta-cols li { padding: 4px 0; }
+  /* allow selecting meta text */
+  .meta-list, .meta-cols, .meta-cols li { user-select: text; }
+
+  /* Context menu styling for node actions */
+  #node-context-menu { font-size: 14px; }
+  #node-context-menu { cursor: default; }
+  #node-context-menu .ctx-btn { display: block; width: 100%; background: transparent; border: none; color: #cfe0f5; padding: 6px 8px; text-align: left; cursor: pointer; font-size:14px; }
+  #node-context-menu .ctx-btn:hover { background: rgba(80,160,230,0.22); color: #fff; }
+
+    /* Misc */
+    .no-select { user-select: none; -webkit-user-select: none; -ms-user-select: none; }
+    .layered-disabled { cursor: default; }
+    /* Ensure Node Logic inner panes expand with content and do NOT show their own scrollbars.
+       The outer container (#node-logic-container) should be the only element that scrolls. */
+    #panel-node-logic #node-logic-container { overflow: auto; }
+    #panel-node-logic .logic-inner-pane { overflow: visible; }
+   /* Override the generic .code-block sizing within the Node Logic panel so long content
+     grows the pane and is scrolled by the outer container. For the Section tab we prefer
+     visual wrapping (pre-wrap) so pseudocode and notes wrap instead of producing a
+     horizontal overflow. Preserve line breaks while allowing wrapping of long lines. */
+   #panel-node-logic .code-block {
+    max-height: none;
+    overflow: visible;
+    white-space: pre-wrap; /* preserve existing line breaks, but allow wrapping */
+    overflow-wrap: anywhere; /* break long words if needed */
+    word-break: break-word;
+   }
+
+    /* Style the small toolbar buttons (per-pane Select All) to match the layered toolbar theme */
+    .small-toolbar .toolbar-btn {
+      background: rgba(8,18,26,0.7);
+      color: #dfeaf6;
+      border: 1px solid rgba(130,160,190,0.12);
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .small-toolbar .toolbar-btn:hover {
+      background: rgba(60,100,140,0.14);
+      color: #ffffff;
+      border-color: rgba(100,150,200,0.18);
+    }
+    .small-toolbar .toolbar-btn:active,
+    .small-toolbar .toolbar-btn.pressed {
+      background: rgba(70,130,200,0.26);
+      color: #ffffff;
+      border-color: rgba(80,160,230,0.35);
+      box-shadow: 0 0 0 2px rgba(80,160,230,0.06) inset;
+      transform: translateY(1px);
+    }
+
+    /* Simple accordion toggle button (small chevron) */
+    .accordion-toggle {
+      appearance: none;
+      background: transparent;
+      border: none;
+      color: #9fb3c8;
+      font-size: 14px;
+      width: 22px; height: 22px;
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transform-origin: center;
+    }
+    .accordion-toggle[aria-expanded="true"] { color: #cfe0f5; transform: rotate(90deg); }
+
+  /* Align the per-pane Select All toolbar to the right inside expanded content */
+  .logic-inner-pane .inner-content .small-toolbar { display: flex; justify-content: flex-end; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Adjacency Graph</strong>
+    <span class="badge">vanilla node + canvas</span>
+  </header>
+
+  <div id="wrap">
+    <aside id="panel">
+      <h2>Nodes</h2>
+      <!-- Search box to filter nodes by id/label (case-insensitive, partial match) -->
+      <div style="margin:6px 0 10px 0;">
+        <input id="node-search" type="search" placeholder="Search nodes..." aria-label="Search nodes" class="search-input" />
+      </div>
+      <ul id="node-list" aria-label="Nodes list"></ul>
+
+      
+
+      <h2>Parsed Summary</h2>
+      <div id="summary"></div>
+    </aside>
+
+    <!-- draggable splitter -->
+    <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" title="Drag to resize left pane">
+      <div class="handle" aria-hidden="true"></div>
+    </div>
+
+    <main>
+      <!-- Tab header -->
+      <div class="tabs" role="tablist" aria-label="Graph views">
+        <button id="tab-circular" class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-circular">Circular</button>
+        <button id="tab-layered" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-layered">Layered</button>
+  <button id="tab-node-logic" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-node-logic">Section</button>
+  <button id="tab-node-meta" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-node-meta">Tables</button>
+      </div>
+
+      <!-- Tab panels -->
+      <div class="tab-panels">
+        <!-- Layered panel -->
+  <section id="panel-layered" class="tab-panel" role="tabpanel" aria-labelledby="tab-layered" data-active="false">
+          <div class="graph-wrap" style="position:relative;">
+            <div class="layered-toolbar panel-toolbar" id="layered_toolbar" aria-hidden="false">
+              <button id="btn-layer-horizontal" title="Horizontal layout" aria-pressed="true">Horizontal</button>
+              <button id="btn-layer-vertical" title="Vertical layout" aria-pressed="false">Vertical</button>
+              <button id="btn-layer-flip" title="Flip layout" aria-pressed="false">Flip</button>
+            </div>
+            <div class="drag-scroll" id="layers_scroller">
+              <canvas id="canvas_layers" class="layered-disabled"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <!-- Node Logic panel -->
+        <section id="panel-node-logic" class="tab-panel" role="tabpanel" aria-labelledby="tab-node-logic" data-active="false">
+          <div class="graph-wrap" style="position:relative;">
+            <!-- Outer toolbar remains here -->
+            <div class="logic-toolbar panel-toolbar" id="logic_toolbar" aria-hidden="false">
+              <span id="logic_toolbar_label" class="toolbar-label">—</span>
+              <!-- main toolbar actions can remain here; per-request, select-all moved into each inner pane -->
+            </div>
+
+            <!-- Outer scrolling container: when inner panes contain long text, this outer element scrolls vertically -->
+            <div id="node-logic-container" style="padding:12px; color:#cfe0f5; height: calc(100% - 44px); overflow:auto; box-sizing: border-box;">
+              <!-- Two inner panes stacked vertically; both expand with content and do NOT scroll independently -->
+              <div class="logic-inner-pane" id="node-logic-primary" style="position:relative; width:100%;" data-expanded="false">
+                <div class="inner-header" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="accordion-toggle" id="toggle-logic-primary" aria-expanded="false" title="Toggle" style="font-size:18px;">▸</button>
+                    <button id="heading-logic-primary" class="accordion-heading" aria-controls="node-logic-code" aria-expanded="false" style="background:transparent;border:none;color:#cfe0f5;font-size:14px;cursor:pointer;padding:6px 8px;">Pseudocode</button>
+                  </div>
+                </div>
+                <div id="node-logic-primary-content" class="inner-content" style="margin-top:8px; display:none;">
+                  <div class="small-toolbar" style="margin-bottom:8px;">
+                    <button id="btn-logic-selectall-left" class="toolbar-btn small">Select All</button>
+                  </div>
+                  <div id="node-logic-code" class="code-block">Select a node on the left to view its pseudocode.</div>
+                </div>
+              </div>
+
+              <div class="logic-inner-pane" id="node-logic-secondary" style="position:relative; width:100%; margin-top:18px;" data-expanded="true">
+                <div class="inner-header" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="accordion-toggle" id="toggle-logic-secondary" aria-expanded="true" title="Toggle" style="font-size:18px;">▾</button>
+                    <button id="heading-logic-secondary" class="accordion-heading" aria-controls="node-logic-alt" aria-expanded="true" style="background:transparent;border:none;color:#cfe0f5;font-size:14px;cursor:pointer;padding:6px 8px;">Notes</button>
+                  </div>
+                </div>
+                <div id="node-logic-secondary-content" class="inner-content" style="margin-top:8px; display:block;">
+                  <div class="small-toolbar" style="margin-bottom:8px;">
+                    <button id="btn-logic-selectall-right" class="toolbar-btn small">Select All</button>
+                  </div>
+                  <div id="node-logic-alt" class="code-block">Secondary pane (additional notes or alternate view).</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Node Meta panel -->
+        <section id="panel-node-meta" class="tab-panel" role="tabpanel" aria-labelledby="tab-node-meta" data-active="false">
+          <!-- Tables panel: renders the contents of Tables.js as a collapsible list -->
+          <div class="graph-wrap" style="position:relative; padding:0; display:flex; flex-direction:column; height:100%; box-sizing:border-box; min-height:0;">
+            <div style="padding:0 12px 0 12px; color: #cfe0f5; box-sizing:border-box; display:flex; flex-direction:column; flex:1 1 auto; min-height:0;">
+              <div id="node-meta-container" style="width:100%; display:flex; flex-direction:column; flex:1 1 auto; min-height:0; align-items:flex-start;">
+                <div id="tables-toolbar" class="small-toolbar" style="display:flex; align-items:center; gap:8px; margin-bottom:6px; width:100%;">
+                  <input id="tables-search" type="search" placeholder="Search tables..." aria-label="Search tables" class="search-input" style="max-width:280px; margin-left:8px;" />
+                  <button id="btn-clear-tables" class="toolbar-btn" style="margin-left:8px;">clear selections</button>
+                  <button id="btn-copy-tables" class="toolbar-btn" style="margin-left:6px;">copy to clipboard</button>
+                  <div id="tables-selected-count" style="margin-left:auto; color:#9fb3c8; font-size:13px;">0 selected</div>
+                </div>
+                <div id="tables-list" class="meta-list" style="flex:1 1 auto; overflow:auto; width:100%; height:100%; max-height:none; margin-top:0; -ms-overflow-style: none; scrollbar-width: none;"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Node Notes panel removed -->
+
+  <!-- Circular panel: added reset + filter controls -->
+  <section id="panel-circular" class="tab-panel" role="tabpanel" aria-labelledby="tab-circular" data-active="true">
+          <div class="graph-wrap" style="position:relative;">
+            <!-- toolbar -->
+            <div class="circular-toolbar panel-toolbar" id="circular_toolbar" aria-hidden="false">
+              <button id="btn-reset-circle" title="Reset circular layout">Reset</button>
+              <button id="btn-toggle-filter" title="Show only selected nodes" aria-pressed="false">Show only selected</button>
+            </div>
+
+            <div class="drag-scroll" id="circular_scroller" style="height:100%;">
+              <canvas id="canvas_top"></canvas>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Load feed.js first so window.feedData exists without a network fetch -->
+  <script src="feed.js"></script>
+  <!-- Load Tables.js so window.tables exists for the inline script that renders Tables -->
+  <script src="Tables.js"></script>
+
+  <script>
+    // Context menu element for tables (inserted once)
+    (function(){
+      const cm = document.createElement('div');
+      cm.id = 'tables-context-menu';
+      cm.innerHTML = `<button id="ctx-select-toggle">Select</button>`;
+      document.body.appendChild(cm);
+    })();
+    // --- element refs ---
+  const tabLayeredBtn   = document.getElementById('tab-layered');
+  const tabCircularBtn  = document.getElementById('tab-circular');
+  const tabNodeLogicBtn = document.getElementById('tab-node-logic');
+  const tabNodeMetaBtn  = document.getElementById('tab-node-meta');
+  const panelLayered    = document.getElementById('panel-layered');
+  const panelCircular   = document.getElementById('panel-circular');
+  const panelNodeLogic  = document.getElementById('panel-node-logic');
+  const panelNodeMeta   = document.getElementById('panel-node-meta');
+  // Notes tab removed
+
+    const canvasTop       = document.getElementById('canvas_top');        // circular
+    const canvasLayers    = document.getElementById('canvas_layers');     // layered
+  // --- Tables selection state & context menu wiring ---
+  const selectedTables = new Set();
+  let currentTablesContextTarget = null; // { tname, el }
+  const tablesCtxMenu = document.getElementById('tables-context-menu');
+  const tablesCtxToggle = tablesCtxMenu ? tablesCtxMenu.querySelector('#ctx-select-toggle') : null;
+  const btnClearTables = document.getElementById('btn-clear-tables');
+  const lblSelectedCount = document.getElementById('tables-selected-count');
+  const btnCopyTables = document.getElementById('btn-copy-tables');
+
+  function updateSelectedCount() {
+    if (lblSelectedCount) lblSelectedCount.textContent = `${selectedTables.size} selected`;
+  }
+
+  // Capitalize helper: Title Case each word (first letter uppercase, rest lowercase)
+  function capitalizeWords(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).split(/(\s+|-|_)/).map(piece => {
+      // preserve separators (spaces, hyphens, underscores)
+      if (/^\s+$/.test(piece) || piece === '-' || piece === '_') return piece;
+      return piece.length > 0 ? piece.charAt(0).toUpperCase() + piece.slice(1).toLowerCase() : piece;
+    }).join('');
+  }
+
+  // Uppercase helper: return the entire string in UPPERCASE
+  function upperCaseString(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).toUpperCase();
+  }
+
+  function hideCtxMenu() {
+    if (!tablesCtxMenu) return;
+    tablesCtxMenu.style.display = 'none';
+  }
+
+  function showCtxMenu(x, y) {
+    if (!tablesCtxMenu) return;
+    tablesCtxMenu.style.position = 'absolute';
+    tablesCtxMenu.style.left = x + 'px';
+    tablesCtxMenu.style.top = y + 'px';
+    tablesCtxMenu.style.zIndex = 9999;
+    tablesCtxMenu.style.display = 'block';
+  }
+
+  // click handler for context menu toggle
+  if (tablesCtxToggle) {
+    tablesCtxToggle.addEventListener('click', (e) => {
+      if (!currentTablesContextTarget) return;
+      const { rawTname, el } = currentTablesContextTarget;
+      if (selectedTables.has(rawTname)) {
+        selectedTables.delete(rawTname);
+        if (el) el.classList.remove('table-selected');
+      } else {
+        selectedTables.add(rawTname);
+        if (el) el.classList.add('table-selected');
+      }
+      updateSelectedCount();
+
+      // helper: format selected tables into the requested block format (capitalized)
+      function formatSelectedForClipboard() {
+        const tables = Array.isArray(window.tables) ? window.tables : [];
+        const out = [];
+        for (const rawName of selectedTables) {
+          // find table object by raw name
+          const tbl = tables.find(x => x && String(x.name) === String(rawName));
+          const colsRaw = Array.isArray(tbl && tbl.columns) ? tbl.columns.map(c => (c && c.name) ? String(c.name) : String(c)) : [];
+          const capName = upperCaseString(rawName);
+          const capCols = colsRaw.map(s => upperCaseString(s));
+          out.push('---');
+          out.push(`table: ${capName}`);
+          out.push(`table columns: [ ${capCols.join(', ')} ]`);
+        }
+        return out.length ? out.join('\n') : '';
+      }
+
+      // copy handler
+      if (btnCopyTables) {
+        btnCopyTables.addEventListener('click', async () => {
+          const payload = formatSelectedForClipboard();
+          if (!payload) return; // nothing selected
+          try {
+            if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+              await navigator.clipboard.writeText(payload);
+            } else {
+              // fallback: textarea
+              const ta = document.createElement('textarea');
+              ta.value = payload;
+              ta.style.position = 'fixed'; ta.style.left = '-9999px';
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+            }
+            // visual feedback: briefly mark pressed
+            btnCopyTables.classList.add('pressed');
+            setTimeout(() => btnCopyTables.classList.remove('pressed'), 220);
+          } catch (e) {
+            console.error('Copy failed', e);
+          }
+        });
+      }
+      hideCtxMenu();
+    });
+  }
+
+  // clicking outside closes context menu
+  document.addEventListener('click', (e) => {
+    if (!tablesCtxMenu) return;
+    if (e.target === tablesCtxMenu || tablesCtxMenu.contains(e.target)) return;
+    hideCtxMenu();
+  });
+
+  // wire clear selections button
+  if (btnClearTables) {
+    btnClearTables.addEventListener('click', () => {
+      selectedTables.clear();
+      // remove class from any items
+      document.querySelectorAll('#tables-list .table-selected').forEach(el => el.classList.remove('table-selected'));
+      updateSelectedCount();
+    });
+  }
+
+  updateSelectedCount();
+    const layersScroller  = document.getElementById('layers_scroller');
+    const circularScroller= document.getElementById('circular_scroller');
+    const ctxTop          = canvasTop.getContext('2d');
+
+    // circular controls
+    const btnResetCircle = document.getElementById('btn-reset-circle');
+    const btnToggleFilter = document.getElementById('btn-toggle-filter');
+  // layered toolbar buttons
+  const btnLayerHorizontal = document.getElementById('btn-layer-horizontal');
+  const btnLayerVertical = document.getElementById('btn-layer-vertical');
+  const btnLayerFlip = document.getElementById('btn-layer-flip');
+  // orientation state (will be set during init)
+  let layeredOrientation = 'vertical';
+  // flip state: when true the head/root appears at the opposite side (top vs bottom, left vs right)
+  // default false so layouts start from the selected head/root (top or left)
+  let layeredFlipped = false;
+
+    // --- helpers ---
+    const isVisible = (el) => !!(el && el.offsetParent !== null && getComputedStyle(el).display !== 'none');
+
+    function setCanvasSize(canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width  = Math.max(1, Math.floor(rect.width  * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return ctx;
+    }
+    function setCanvasSizeWH(canvas, cssWidthPx, cssHeightPx) {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.style.width  = Math.ceil(cssWidthPx) + 'px';
+      canvas.style.height = Math.ceil(cssHeightPx) + 'px';
+      canvas.width  = Math.max(1, Math.floor(cssWidthPx  * dpr));
+      canvas.height = Math.max(1, Math.floor(cssHeightPx * dpr));
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return ctx;
+    }
+
+    function resizeActive() {
+      // Only render the active/visible panel to avoid 0-size measurements
+      if (isVisible(panelCircular) && isVisible(canvasTop)) {
+        setCanvasSize(canvasTop);
+        // ensure positions exist (layoutCircle was called at init); drawTop will use current positions
+        drawTop();
+      }
+      if (isVisible(panelLayered)) {
+        drawLayers(); // drawLayers handles its own sizing using layersScroller rect
+      }
+    }
+    window.addEventListener('resize', resizeActive);
+
+    // Layered toolbar wiring
+    function setLayerOrientation(o) {
+      layeredOrientation = o === 'horizontal' ? 'horizontal' : 'vertical';
+      if (btnLayerHorizontal) btnLayerHorizontal.setAttribute('aria-pressed', String(layeredOrientation === 'horizontal'));
+      if (btnLayerVertical) btnLayerVertical.setAttribute('aria-pressed', String(layeredOrientation === 'vertical'));
+      // redraw with new orientation
+      drawLayers();
+    }
+    if (btnLayerHorizontal) btnLayerHorizontal.addEventListener('click', () => setLayerOrientation('horizontal'));
+    if (btnLayerVertical) btnLayerVertical.addEventListener('click', () => setLayerOrientation('vertical'));
+    if (btnLayerFlip) btnLayerFlip.addEventListener('click', () => {
+      layeredFlipped = !layeredFlipped;
+      btnLayerFlip.setAttribute('aria-pressed', String(layeredFlipped));
+      // redraw with new flipped state
+      drawLayers();
+    });
+
+  // ensure flip button reflects current state on load
+  if (btnLayerFlip) btnLayerFlip.setAttribute('aria-pressed', String(layeredFlipped));
+  // ensure visual pressed state reflects default
+  if (btnLayerFlip) btnLayerFlip.classList.toggle('pressed', layeredFlipped);
+
+    // --- data/state ---
+    let nodes = [];
+    let edges = [];
+    let positions = new Map();      // circular positions (mutable via drag)
+    let childrenMap = new Map();
+    let selectedId = null;
+    let depthMap = new Map();
+    let visitCounts = new Map();
+    let highlighted = new Set();
+    let orderIndexMap = new Map();
+  let hoverPathNodes = new Set();
+
+    // layered occurrences (repeats per depth)
+    let occurrences = [];
+    let occEdges = [];
+    let occBoxes = [];
+
+    // interactions
+    let dragging = null;     // drag nodes on circular
+    let hoverNodeId = null;
+
+    // circular controls state
+    let showOnlySelected = false;
+    // store canonical positions so Reset can restore layout regardless of subsequent drags
+    let canonicalPositions = new Map();
+
+    // drag-scroll (shared)
+    let isPanning = false;
+    let activeScroller = null;
+    let panStartX = 0, panStartY = 0, panStartLeft = 0, panStartTop = 0;
+    let suppressLayerClick = false; // layered click after pan
+
+    // visuals
+    const nodeRadius = 6;
+    const nodeRadiusHighlighted = 9;
+    const depthPalette = ['#ff8b3d','#ffd166','#60c86f','#4cc3b8','#6fb1ff','#9b77ff','#ff6fa3','#ffb86b'];
+    const leafHighlight = '#2fa33a';
+    const defaultNodeColor = 'rgba(220,230,240,0.95)';
+
+    // --- build graph from window.feedData ---
+    function parseFromFeedData(feedObj) {
+      const allLabels = new Set();
+      const edges = [];
+      for (const [key, obj] of Object.entries(feedObj || {})) {
+        const parent = (obj && obj.label) ? obj.label : key;
+        if (parent) allLabels.add(parent);
+        const children = (obj && Array.isArray(obj.children)) ? obj.children : [];
+        for (const ch of children) {
+          const childLabel = ch && ch.label != null ? String(ch.label) : String(ch);
+          if (!childLabel || childLabel === parent) continue;
+          allLabels.add(childLabel);
+          edges.push({ source: parent, target: childLabel });
+        }
+      }
+      const nodes = [...allLabels].map(l => ({ id: l, label: l }));
+      return { nodes, edges };
+    }
+
+    function buildChildrenMap() {
+      childrenMap = new Map();
+      edges.forEach(e => {
+        if (!childrenMap.has(e.source)) childrenMap.set(e.source, []);
+        childrenMap.get(e.source).push(e.target);
+      });
+    }
+
+    // Distinct acyclic visits + minimal depths
+    function computeDepthsAndCounts(rootId) {
+      const depths = new Map();
+      const counts = new Map();
+      if (!rootId) return { depths, counts };
+      function dfs(nodeId, depth, path) {
+        counts.set(nodeId, (counts.get(nodeId) || 0) + 1);
+        if (!depths.has(nodeId) || depth < depths.get(nodeId)) depths.set(nodeId, depth);
+        const kids = childrenMap.get(nodeId) || [];
+        for (const k of kids) {
+          if (path.has(k)) continue;
+          path.add(k);
+          dfs(k, depth + 1, path);
+          path.delete(k);
+        }
+      }
+      const startPath = new Set([rootId]);
+      dfs(rootId, 0, startPath);
+      return { depths, counts };
+    }
+
+    // Layered occurrences/edges
+    function computeOccurrences(rootId) {
+      const occSet = new Set();
+      const edgesSet = new Set();
+      if (!rootId) return { occurrences: [], occEdges: [] };
+      function dfs(node, depth, path) {
+        occSet.add(`${node}@${depth}`);
+        const kids = childrenMap.get(node) || [];
+        for (const k of kids) {
+          if (path.has(k)) continue;
+          edgesSet.add(`${node}@${depth}=>${k}@${depth + 1}`);
+          path.add(k);
+          dfs(k, depth + 1, path);
+          path.delete(k);
+        }
+      }
+      const startPath = new Set([rootId]);
+      dfs(rootId, 0, startPath);
+      const occurrences = [...occSet].map(s => {
+        const [id, d] = s.split('@');
+        return { key: s, id, depth: Number(d) };
+      });
+      const occEdges = [...edgesSet].map(e => {
+        const [s, t] = e.split('=>');
+        return { sourceKey: s, targetKey: t };
+      });
+      return { occurrences, occEdges };
+    }
+
+    function setSelection(rootId) {
+      selectedId = rootId;
+      depthMap = new Map();
+      visitCounts = new Map();
+      highlighted = new Set();
+      occurrences = [];
+      occEdges = [];
+
+      if (rootId) {
+        const res = computeDepthsAndCounts(rootId);
+        depthMap = res.depths;
+        visitCounts = res.counts;
+        for (const k of depthMap.keys()) highlighted.add(k);
+        const oc = computeOccurrences(rootId);
+        occurrences = oc.occurrences;
+        occEdges = oc.occEdges;
+      }
+
+      // recompute hover path nodes for current hover (if any)
+      if (selectedId && hoverNodeId) {
+        hoverPathNodes = computeHoverPathNodes(selectedId, hoverNodeId);
+      } else {
+        hoverPathNodes = new Set();
+      }
+
+      document.querySelectorAll('#node-list li').forEach(li => {
+        li.classList.toggle('selected', li.dataset.nodeId === rootId);
+      });
+
+      // ensure UI updates for active panels
+      resizeActive();
+
+      // when a node is selected, reset the canonical circular layout so positions are recomputed
+      // without changing the currently selected root
+      try { if (typeof resetCircularLayout === 'function') resetCircularLayout(); } catch (e) { /* noop */ }
+
+      // update Node Logic and Node Meta panels for the newly selected node
+      try {
+        if (typeof renderNodeLogic === 'function') renderNodeLogic(rootId);
+      } catch (e) { /* noop */ }
+      try {
+        if (typeof renderNodeMeta === 'function') renderNodeMeta(rootId);
+      } catch (e) { /* noop */ }
+  // Notes panel removed
+    }
+
+    // Node list
+    function populateNodeList(nodesList) {
+  const ul = document.getElementById('node-list');
+  const searchBox = document.getElementById('node-search');
+  ul.innerHTML = '';
+      const nodeSet = new Set(nodesList.map(n => n.id));
+      // Always sort by number of immediate children (ascending). Fallback to label.
+      const sorted = [...nodesList].sort((a,b) => {
+        try {
+          const ca = (childrenMap.get(a.id) || []).length;
+          const cb = (childrenMap.get(b.id) || []).length;
+          if (ca !== cb) return ca - cb;
+        } catch (e) { /* ignore */ }
+        return a.label.localeCompare(b.label);
+      });
+
+      orderIndexMap = new Map();
+      sorted.forEach((n, idx) => orderIndexMap.set(n.id, idx + 1));
+
+  function createItem(id, ancestors = new Set()) {
+        const li = document.createElement('li');
+        li.dataset.nodeId = id;
+        li.tabIndex = 0;
+
+        const row = document.createElement('div');
+        row.className = 'node-row';
+
+        const kids = (childrenMap.get(id) || []).filter(k => nodeSet.has(k) && !ancestors.has(k));
+
+        if (kids.length) {
+          const btn = document.createElement('button');
+          btn.className = 'toggle';
+          btn.textContent = '▶';
+          btn.setAttribute('aria-expanded', 'false');
+          btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const childUL = li.querySelector('.children');
+            const open = childUL.classList.toggle('expanded');
+            btn.textContent = open ? '▾' : '▶';
+            btn.setAttribute('aria-expanded', open.toString());
+          });
+          row.appendChild(btn);
+        } else {
+          const spacer = document.createElement('span');
+          spacer.style.width = '16px';
+          row.appendChild(spacer);
+        }
+
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'label';
+        // Prefer the numeric id from feedData when available, show it alongside the human label
+        const txt = formatNodeLabel(id);
+        labelSpan.textContent = txt;
+        labelSpan.title = txt;
+        // If a search is active, highlight matches inside the visible label text
+        const query = (searchBox && searchBox.value) ? String(searchBox.value).trim() : '';
+        if (query.length > 0) {
+          // simple case-insensitive substring highlight on the visible label
+          const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig');
+          const parts = txt.split(re);
+          if (parts.length > 1) {
+            labelSpan.innerHTML = parts.map(p => re.test(p) ? `<span class="highlight">${p}</span>` : escapeHtml(p)).join('');
+          }
+        }
+        row.appendChild(labelSpan);
+
+        if (kids.length) {
+          const span = document.createElement('span');
+          span.className = 'small';
+          span.textContent = `(${kids.length})`;
+          row.appendChild(span);
+        }
+
+        li.appendChild(row);
+
+        li.addEventListener('click', (ev) => { ev.stopPropagation(); setSelection(id); });
+
+        li.addEventListener('mouseenter', () => { hoverNodeId = id; resizeActive(); });
+        li.addEventListener('mouseleave', () => { if (hoverNodeId === id) { hoverNodeId = null; resizeActive(); } });
+
+        li.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setSelection(id); }
+          if (ev.key === 'ArrowRight') { const btn = li.querySelector('.toggle'); if (btn && btn.getAttribute('aria-expanded') === 'false') btn.click(); }
+          if (ev.key === 'ArrowLeft') { const btn = li.querySelector('.toggle');  if (btn && btn.getAttribute('aria-expanded') === 'true') btn.click(); }
+        });
+
+        if (kids.length) {
+          const childUL = document.createElement('ul');
+          childUL.className = 'children';
+          const nextAnc = new Set(ancestors);
+          nextAnc.add(id);
+          kids.sort((a,b) => (orderIndexMap.get(a)||0) - (orderIndexMap.get(b)||0));
+          kids.forEach(k => childUL.appendChild(createItem(k, nextAnc)));
+          li.appendChild(childUL);
+        }
+
+        return li;
+      }
+
+      sorted.forEach(n => ul.appendChild(createItem(n.id)));
+
+      // Respect active search: do NOT change the current selection when a filter is active.
+      const activeQuery = (searchBox && searchBox.value) ? String(searchBox.value).trim() : '';
+      if (!activeQuery) {
+        // When no filter is active, ensure there is a selection: select top-most node if none selected
+        const firstLi = ul.querySelector('li');
+        if (firstLi && firstLi.dataset && firstLi.dataset.nodeId) {
+          try {
+            // Only change selection if nothing is currently selected
+            if (!selectedId) setSelection(firstLi.dataset.nodeId);
+          } catch (e) { /* noop */ }
+        }
+      } else {
+        // When filtering, do not alter `selectedId` or global view. Keep highlighting only in the left pane.
+      }
+    }
+
+      // Escape HTML to avoid injecting markup when building highlighted labels
+      function escapeHtml(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      // Build a lightweight search index mapping node id -> searchable text (id + label + children labels)
+      function buildSearchIndex() {
+        const index = new Map();
+        try {
+          for (const n of nodes) {
+            const id = n.id;
+            const fd = (window.feedData && window.feedData[id]) ? window.feedData[id] : null;
+            const label = fd && fd.label ? String(fd.label) : String(id);
+            const kids = (childrenMap.get(id) || []).map(k => {
+              const kfd = (window.feedData && window.feedData[k]) ? window.feedData[k] : null;
+              return kfd && kfd.label ? String(kfd.label) : String(k);
+            }).join(' ');
+            index.set(id, (String(id) + ' ' + label + ' ' + kids).toLowerCase());
+          }
+        } catch (e) { /* noop */ }
+        return index;
+      }
+
+      // Filter the visible node list according to the query (case-insensitive substring). Returns a Set of matching ids and their ancestor ids (so parents are shown when children match).
+      function filterNodeIdsByQuery(query, indexMap) {
+        const q = (query || '').trim().toLowerCase();
+        if (!q) return null; // signal: no filtering
+        const matching = new Set();
+        const parentsToShow = new Set();
+        for (const [id, txt] of indexMap.entries()) {
+          if (txt.indexOf(q) !== -1) matching.add(id);
+        }
+        // include parents so that matching children are visible in the nested list
+        if (matching.size > 0) {
+          for (const id of matching) {
+            // walk upward: find any node that lists this id as a child
+            for (const [p, kids] of childrenMap.entries()) {
+              if (kids && kids.indexOf(id) !== -1) {
+                parentsToShow.add(p);
+              }
+            }
+          }
+        }
+        // union matching + parentsToShow
+        const result = new Set([...matching, ...parentsToShow]);
+        return result;
+      }
+
+      // Wire search input: on input, rebuild index and repopulate list with filtered matches
+      (function wireSearch() {
+        const input = document.getElementById('node-search');
+        if (!input) return;
+        let index = buildSearchIndex();
+        input.addEventListener('input', (ev) => {
+          const q = input.value || '';
+          // if query is empty, show full list
+          if (!q.trim()) {
+            populateNodeList(nodes);
+            return;
+          }
+          // rebuild index if nodes changed length
+          if (!index || index.size !== nodes.length) index = buildSearchIndex();
+          const ids = filterNodeIdsByQuery(q, index);
+          if (!ids) { populateNodeList(nodes); return; }
+          // Build a filtered nodes array preserving original ordering
+          const filtered = nodes.filter(n => ids.has(n.id));
+          populateNodeList(filtered);
+          // Expand all parents that contain matching children so results are visible
+          // After DOM creation, expand matching parents
+          requestAnimationFrame(() => {
+            document.querySelectorAll('#node-list li').forEach(li => {
+              const kidsUL = li.querySelector('.children');
+              if (!kidsUL) return;
+              // If any descendant in this li matches the filter, expand
+              const hasMatch = li.querySelector('.highlight') !== null;
+              if (hasMatch) {
+                kidsUL.classList.add('expanded');
+                const btn = li.querySelector('.toggle'); if (btn) { btn.textContent = '\u25be'; btn.setAttribute('aria-expanded','true'); }
+              }
+            });
+          });
+        });
+        // Reset behavior: clear restores full list
+        input.addEventListener('search', (ev) => { if (!input.value) populateNodeList(nodes); });
+      })();
+
+    // Circular layout & drawing
+    function layoutCircle(nodesArr, positionsMap) {
+      const N = nodesArr.length || 1;
+      const padding = 40;
+      const rect = canvasTop.getBoundingClientRect();
+      const w = rect.width || 600, h = rect.height || 300;
+      const cx = w / 2, cy = h / 2;
+      const r = Math.max(10, Math.min(w, h) / 2 - padding);
+      nodesArr.forEach((n, i) => {
+        const theta = (i / N) * Math.PI * 2;
+        positionsMap.set(n.id, { x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) });
+      });
+    }
+
+    function nodeIsReachable(id) {
+      return selectedId && (id === selectedId || depthMap.has(id));
+    }
+
+    function drawTop() {
+      if (!isVisible(panelCircular)) return; // skip drawing when hidden
+      const ctx = ctxTop;
+      if (!ctx) return;
+
+      const rect = canvasTop.getBoundingClientRect();
+      const w = rect.width, h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+
+      // edges
+      const edgeColor = 'rgba(150,180,210,0.6)';
+      const edgeHighlightColor = 'rgba(120,200,255,0.95)';
+
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.95;
+      edges.forEach(e => {
+        // when filter on, draw edges only when both endpoints are reachable
+        if (showOnlySelected && (!nodeIsReachable(e.source) || !nodeIsReachable(e.target))) return;
+        const a = positions.get(e.source);
+        const b = positions.get(e.target);
+        if (!a || !b) return;
+        // highlight if this edge is part of the hover path (root->leaf) OR part of the selected highlighted set
+        const edgeInHoverPath = hoverPathNodes.size > 0 && hoverPathNodes.has(e.source) && hoverPathNodes.has(e.target);
+        const isEdgeHighlighted = edgeInHoverPath || (highlighted.size > 0 && highlighted.has(e.source));
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = isEdgeHighlighted ? edgeHighlightColor : edgeColor;
+        ctx.lineWidth = isEdgeHighlighted ? 2.2 : 1;
+        ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+
+      // nodes
+      nodes.forEach(n => {
+        // when filter is active show only reachable nodes; otherwise show all nodes
+        if (showOnlySelected && !nodeIsReachable(n.id)) return;
+
+        const p = positions.get(n.id);
+        if (!p) return;
+        const isSelectedReachable = depthMap.has(n.id) || n.id === selectedId;
+        const isLeaf = !(childrenMap.get(n.id) && childrenMap.get(n.id).length);
+        const radius = isSelectedReachable ? nodeRadiusHighlighted : nodeRadius;
+
+        // if the underlying feed entry marks this node as completed, render it in gray
+        const fd_top = (window.feedData && window.feedData[n.id]) ? window.feedData[n.id] : null;
+        const completed_top = fd_top && fd_top.completed === true;
+        let fillColor = defaultNodeColor;
+        if (completed_top) {
+          // completed nodes are gray (shape)
+          fillColor = 'rgba(140,150,155,0.95)';
+        } else if (isSelectedReachable) {
+          if (isLeaf) fillColor = leafHighlight;
+          else {
+            const d = Math.max(0, depthMap.get(n.id) || 0);
+            fillColor = depthPalette[d % depthPalette.length];
+          }
+        }
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+
+        // hover ring
+        if (hoverNodeId === n.id) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 4, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(160,210,255,0.85)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        const count = visitCounts.get(n.id) || 0;
+        if (count > 1) {
+          ctx.fillStyle = '#042028';
+          ctx.font = `${Math.max(10, Math.floor(radius+2))}px system-ui, Arial`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(count), p.x, p.y);
+          ctx.font = "12px system-ui, Arial";
+          ctx.textAlign = 'start';
+          ctx.textBaseline = 'alphabetic';
+        }
+
+        // draw label (show numeric feed id when available)
+        try {
+          const labelText = formatNodeLabel(n.id);
+          const labelColorTop = completed_top ? '#000000' : '#cfe0f5';
+          ctx.fillStyle = labelColorTop;
+          ctx.font = '12px system-ui, Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          const textX = p.x;
+          const textY = p.y + radius + 6;
+          ctx.fillText(labelText, textX, textY);
+          // no strikethrough; completed nodes are indicated by gray fill and black label for readability
+        } catch (e) {
+          ctx.fillStyle = '#cfe0f5';
+          ctx.font = '12px system-ui, Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText(formatNodeLabel(n.id), p.x, p.y + radius + 6);
+        }
+      });
+    }
+
+    function findNodeAtTop(x, y) {
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const n = nodes[i];
+        // respect filter when hit-testing as well
+        if (showOnlySelected && !nodeIsReachable(n.id)) continue;
+        const p = positions.get(n.id);
+        if (!p) continue;
+        const dx = x - p.x;
+        const dy = y - p.y;
+        const r = nodeRadiusHighlighted + 4;
+        if (dx*dx + dy*dy <= r*r) return n;
+      }
+      return null;
+    }
+
+    // Circular interactions: drag & hover only
+    canvasTop.addEventListener('mousedown', (ev) => {
+      if (!isVisible(panelCircular)) return;
+      ev.preventDefault();
+      const rect = canvasTop.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const hit = findNodeAtTop(x, y);
+      if (hit) {
+        const p = positions.get(hit.id);
+        dragging = { id: hit.id, offsetX: x - p.x, offsetY: y - p.y };
+        document.body.classList.add('no-select');
+        ev.stopPropagation();
+      }
+    });
+
+    window.addEventListener('mousemove', (ev) => {
+      // Hover for circular
+      if (isVisible(panelCircular)) {
+        const rectTop = canvasTop.getBoundingClientRect();
+        const xTop = ev.clientX - rectTop.left;
+        const yTop = ev.clientY - rectTop.top;
+        let hit = null;
+        if (xTop >= 0 && yTop >= 0 && xTop <= rectTop.width && yTop <= rectTop.height) {
+          hit = findNodeAtTop(xTop, yTop);
+        }
+        const newHover = hit ? hit.id : null;
+        if (newHover !== hoverNodeId) {
+          hoverNodeId = newHover;
+          // update hover path nodes for current selection
+          if (selectedId && hoverNodeId) hoverPathNodes = computeHoverPathNodes(selectedId, hoverNodeId); else hoverPathNodes = new Set();
+          drawTop();
+          if (isVisible(panelLayered)) drawLayers();
+        }
+        if (dragging) {
+          positions.set(dragging.id, { x: xTop - dragging.offsetX, y: yTop - dragging.offsetY });
+          drawTop();
+        }
+      }
+
+      // Hover for layered
+      if (isVisible(panelLayered)) {
+        const rectLay = canvasLayers.getBoundingClientRect();
+        const xLay = ev.clientX - rectLay.left;
+        const yLay = ev.clientY - rectLay.top;
+        if (xLay >= 0 && yLay >= 0 && xLay <= rectLay.width && yLay <= rectLay.height) {
+          const occ = findOccurrenceAtLayer(xLay, yLay);
+          const h2 = occ ? occ.id : null;
+          if (h2 !== hoverNodeId) {
+            hoverNodeId = h2;
+              if (selectedId && hoverNodeId) hoverPathNodes = computeHoverPathNodes(selectedId, hoverNodeId); else hoverPathNodes = new Set();
+              if (isVisible(panelCircular)) drawTop();
+              drawLayers();
+          }
+        }
+      }
+
+      // Drag-scroll panning
+      if (isPanning && activeScroller) {
+        const dx = ev.clientX - panStartX;
+        const dy = ev.clientY - panStartY;
+        if (activeScroller === layersScroller && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+          suppressLayerClick = true;
+        }
+        activeScroller.scrollLeft = panStartLeft - dx;
+        activeScroller.scrollTop  = panStartTop  - dy;
+        ev.preventDefault();
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (dragging) {
+        dragging = null;
+        document.body.classList.remove('no-select');
+      }
+      if (isPanning) {
+        if (activeScroller === layersScroller) setTimeout(() => { suppressLayerClick = false; }, 0);
+        activeScroller.classList.remove('dragging');
+        isPanning = false;
+        activeScroller = null;
+      }
+    });
+
+    // Attach drag-scroll to both scrollers
+    [layersScroller, circularScroller].forEach(scroller => {
+      scroller.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        // do not start pan when user is dragging a node
+        if (dragging) return;
+        isPanning = true;
+        activeScroller = scroller;
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+        panStartLeft = scroller.scrollLeft;
+        panStartTop  = scroller.scrollTop;
+        scroller.classList.add('dragging');
+        document.body.classList.add('no-select');
+        e.preventDefault();
+      });
+    });
+
+    // --- Left panel vertical drag-to-scroll ---
+    const leftPanel = document.getElementById('panel');
+    let leftDragging = false;
+    let leftDragStartY = 0;
+    let leftStartScrollTop = 0;
+    let leftDidDrag = false;
+
+    if (leftPanel) {
+      leftPanel.addEventListener('mousedown', (e) => {
+        // only start drag on primary button and when not clicking on interactive controls (buttons/inputs)
+        if (e.button !== 0) return;
+        const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+        if (['button','a','input','select','textarea'].includes(tag)) return;
+        leftDragging = true;
+        leftDidDrag = false;
+        leftDragStartY = e.clientY;
+        leftStartScrollTop = leftPanel.scrollTop;
+        leftPanel.classList.add('dragging');
+        document.body.classList.add('no-select');
+        e.preventDefault();
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!leftDragging) return;
+        const dy = e.clientY - leftDragStartY;
+        if (Math.abs(dy) > 4) leftDidDrag = true; // small threshold to avoid click interference
+        leftPanel.scrollTop = leftStartScrollTop - dy;
+      });
+
+      window.addEventListener('mouseup', (e) => {
+        if (!leftDragging) return;
+        leftDragging = false;
+        leftPanel.classList.remove('dragging');
+        document.body.classList.remove('no-select');
+        // if we dragged, suppress the next click event to avoid accidental activation
+        if (leftDidDrag) {
+          const suppress = (ev) => { ev.stopPropagation(); ev.preventDefault(); window.removeEventListener('click', suppress, true); };
+          window.addEventListener('click', suppress, true);
+        }
+      });
+    }
+
+    // --- Left pane splitter (resizable) ---
+    const splitter = document.getElementById('splitter');
+    const wrap = document.getElementById('wrap');
+    let splitterDragging = false;
+    let startX = 0;
+    let startLeftWidth = 0; // px
+    const computedStyle = window.getComputedStyle(wrap);
+    const defaultLeftPx = 320;
+
+    function pxToNumber(v) { return Number(String(v).replace('px','')) || 0; }
+
+    if (splitter && wrap) {
+      splitter.addEventListener('mousedown', (ev) => {
+        if (ev.button !== 0) return; // left button only
+        splitterDragging = true;
+        startX = ev.clientX;
+        // read current left column width from computed grid-template-columns
+  const cols = getComputedStyle(wrap).gridTemplateColumns.split(' ');
+  // expected format: '<left> <splitter> <right>'
+  startLeftWidth = pxToNumber(cols[0]);
+        document.body.style.cursor = 'col-resize';
+        document.body.classList.add('no-select');
+        ev.preventDefault();
+      });
+
+      window.addEventListener('mousemove', (ev) => {
+        if (!splitterDragging) return;
+        const dx = ev.clientX - startX;
+        let newLeft = startLeftWidth + dx;
+        const minW = 160; const maxW = Math.floor(window.innerWidth * 0.8);
+        if (newLeft < minW) newLeft = minW;
+        if (newLeft > maxW) newLeft = maxW;
+        // keep splitter column width fixed at 8px
+        wrap.style.gridTemplateColumns = `${Math.round(newLeft)}px 8px 1fr`;
+        // trigger a resize so canvases redraw correctly
+        resizeActive();
+      });
+
+      window.addEventListener('mouseup', (ev) => {
+        if (!splitterDragging) return;
+        splitterDragging = false;
+        document.body.style.cursor = '';
+        document.body.classList.remove('no-select');
+      });
+
+      // double-click on splitter resets width
+      splitter.addEventListener('dblclick', () => {
+        wrap.style.gridTemplateColumns = `${defaultLeftPx}px 8px 1fr`;
+        resizeActive();
+      });
+    }
+
+    // Layered drawing (supports horizontal and vertical orientations)
+    function drawLayers() {
+      if (!isVisible(panelLayered)) return; // skip when hidden
+      let ctx = canvasLayers.getContext('2d');
+      const rect = layersScroller.getBoundingClientRect();
+      const scrollerW = rect.width;
+      const scrollerH = rect.height;
+
+      occBoxes = [];
+      ctx.clearRect(0, 0, canvasLayers.width, canvasLayers.height);
+
+      if (occurrences.length === 0) {
+        setCanvasSizeWH(canvasLayers, scrollerW, scrollerH);
+        ctx = canvasLayers.getContext('2d');
+        ctx.fillStyle = 'rgba(200,220,240,0.08)';
+        ctx.font = '14px system-ui, Arial';
+        ctx.fillText('Select a root in the left list to view layered paths here.', 12, 24);
+        return;
+      }
+
+      const prevLeft = layersScroller.scrollLeft;
+      const prevTop  = layersScroller.scrollTop;
+
+      // group occurrences by depth (depth 0 is root, larger = farther from root)
+      const byDepth = new Map();
+      let maxDepth = 0;
+      occurrences.forEach(o => {
+        if (!byDepth.has(o.depth)) byDepth.set(o.depth, []);
+        byDepth.get(o.depth).push(o);
+        if (o.depth > maxDepth) maxDepth = o.depth;
+      });
+      // If orientation is horizontal, place depths as columns left->right (root left, leaves right)
+      if (layeredOrientation === 'horizontal') {
+        // horizontal layout params
+        const marginLeft = 120, marginRight = 60, marginTop = 40, marginBottom = 40;
+        const colSpacing = 72; // horizontal spacing between depth columns
+        const minNodeW = 120;
+        const rowPadding = 18; // vertical gap between nodes in a column
+
+        ctx.font = "12px system-ui, Arial";
+
+        // compute per-depth column width and column heights (total height needed)
+        const colWidths = [];
+        const colHeights = [];
+        let maxColWidth = 0;
+        let totalHeightNeeded = 0;
+        for (let d = 0; d <= maxDepth; d++) {
+          const arr = byDepth.get(d) || [];
+          let maxLabelW = 0;
+          for (const o of arr) {
+            const tw = ctx.measureText(o.id).width;
+            if (tw > maxLabelW) maxLabelW = tw;
+          }
+          const nodeW = Math.max(minNodeW, Math.ceil(maxLabelW + 24));
+          colWidths[d] = nodeW;
+          const colH = arr.length * (28 + rowPadding) - (arr.length > 0 ? rowPadding : 0);
+          colHeights[d] = Math.max(colH, 0);
+          maxColWidth = Math.max(maxColWidth, nodeW);
+          totalHeightNeeded = Math.max(totalHeightNeeded, colHeights[d]);
+        }
+
+        const totalWidth = Math.max(scrollerW, marginLeft + (maxDepth + 1) * (maxColWidth + colSpacing) + marginRight);
+        const totalHeight = Math.max(scrollerH, marginTop + totalHeightNeeded + marginBottom);
+
+        ctx = setCanvasSizeWH(canvasLayers, totalWidth, totalHeight);
+        layersScroller.scrollLeft = prevLeft;
+        layersScroller.scrollTop  = prevTop;
+
+        const occPos = new Map();
+
+        // place nodes in each column, vertically centered
+        for (let d = 0; d <= maxDepth; d++) {
+          const arr = byDepth.get(d) || [];
+          arr.sort((a,b) => (orderIndexMap.get(a.id)||0) - (orderIndexMap.get(b.id)||0));
+          const colW = colWidths[d] || minNodeW;
+          // If flipped, invert the depth column ordering so root appears on the right
+          const depthIndex = layeredFlipped ? (maxDepth - d) : d;
+          const colX = marginLeft + depthIndex * (maxColWidth + colSpacing) + colW/2;
+          const colTotalH = colHeights[d];
+          const startY = marginTop + Math.max(0, (totalHeightNeeded - colTotalH) / 2) + 14;
+          arr.forEach((o, i) => {
+            const y = startY + i * (28 + rowPadding);
+            occPos.set(o.key, { x: colX, y, nodeW: colW });
+          });
+        }
+
+        // draw edges left->right (parent at smaller depth x to child at larger depth x)
+        ctx.clearRect(0, 0, totalWidth, totalHeight);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(160,180,200,0.55)';
+        occEdges.forEach(e => {
+          // entries are parent@d => child@(d+1)
+          const parentPos = occPos.get(e.sourceKey);
+          const childPos = occPos.get(e.targetKey);
+          if (!parentPos || !childPos) return;
+          const a = parentPos; // parent is left
+          const b = childPos;  // child is right
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          const midX = (a.x + b.x) / 2;
+          ctx.bezierCurveTo(midX, a.y, midX, b.y, b.x, b.y);
+          // highlight if this edge sits between two hover-path nodes
+          const edgeKeyASrc = String(e.sourceKey).split('@')[0];
+          const edgeKeyATgt = String(e.targetKey).split('@')[0];
+          const isEdgeHighlighted = hoverPathNodes.size > 0 && hoverPathNodes.has(edgeKeyASrc) && hoverPathNodes.has(edgeKeyATgt);
+          if (isEdgeHighlighted) { ctx.strokeStyle = 'rgba(120,200,255,0.95)'; ctx.lineWidth = 2.2; } else { ctx.strokeStyle = 'rgba(160,180,200,0.55)'; ctx.lineWidth = 1; }
+          ctx.stroke();
+        });
+
+        // nodes
+        ctx.font = "12px system-ui, Arial";
+        occurrences.forEach(o => {
+          const pos = occPos.get(o.key);
+          if (!pos) return;
+          const isLeaf = !(childrenMap.get(o.id) && childrenMap.get(o.id).length);
+          // completed nodes render in gray
+          const fd_h = (window.feedData && window.feedData[o.id]) ? window.feedData[o.id] : null;
+          const completed_h = fd_h && fd_h.completed === true;
+          const color = completed_h ? 'rgba(140,150,155,0.95)' : (isLeaf ? leafHighlight : depthPalette[o.depth % depthPalette.length]);
+
+          const bw = pos.nodeW, bh = 28;
+          const bx = pos.x - bw/2;
+          const by = pos.y - bh/2;
+
+          occBoxes.push({ id: o.id, bx, by, bw, bh });
+
+          roundRect(ctx, bx, by, bw, bh, 6);
+          ctx.fillStyle = color;
+          ctx.fill();
+
+          ctx.fillStyle = '#03181a';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          try {
+            const labelText = formatNodeLabel(o.id);
+            // label color: use black for completed nodes for better contrast
+            const labelColorH = completed_h ? '#000000' : '#03181a';
+            ctx.fillStyle = labelColorH;
+            ctx.fillText(labelText, pos.x, pos.y);
+            // no strikethrough for completed nodes; visual indicator is the gray box and black label
+          } catch (e) {
+            ctx.fillText(formatNodeLabel(o.id), pos.x, pos.y);
+          }
+
+          if (hoverNodeId && hoverNodeId === o.id) {
+            ctx.save();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(160,210,255,0.95)';
+            roundRect(ctx, bx, by, bw, bh, 6);
+            ctx.stroke();
+            ctx.shadowColor = 'rgba(160,210,255,0.6)';
+            ctx.shadowBlur = 12;
+            roundRect(ctx, bx, by, bw, bh, 6);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          const count = visitCounts.get(o.id) || 0;
+          if (count > 1) {
+            ctx.fillStyle = 'rgba(3,24,28,0.95)';
+            ctx.beginPath();
+            ctx.arc(bx + bw - 12, pos.y - 8, 10, 0, 2*Math.PI);
+            ctx.fill();
+            ctx.fillStyle = '#dfeaf6';
+            ctx.font = '11px system-ui, Arial';
+            ctx.fillText(String(count), bx + bw - 12, pos.y - 8);
+            ctx.font = '12px system-ui, Arial';
+          }
+        });
+
+        // level labels (top of columns) - respect flipped ordering
+        ctx.fillStyle = '#9fb3c8';
+        ctx.font = '13px system-ui, Arial';
+        for (let d = 0; d <= maxDepth; d++) {
+          const depthIndex = layeredFlipped ? (maxDepth - d) : d;
+          const xCenter = marginLeft + depthIndex * (maxColWidth + colSpacing) + (colWidths[d] || minNodeW) / 2;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText('Level ' + d, xCenter, marginTop - 8);
+        }
+
+        return;
+      }
+
+      // Default: vertical orientation (rows per depth)
+      // layout params for vertical orientation (rows per depth)
+  // increase left margin so 'Level' labels don't overlap node boxes
+  const marginX = 120, marginTop = 50, marginBottom = 60;
+      const rowSpacing = 72; // vertical spacing between depth rows
+      const minNodeW = 140;
+      const colPadding = 40; // horizontal gap between nodes in a row
+
+      ctx.font = "12px system-ui, Arial";
+
+      // compute per-depth node widths and max row width
+      const rowWidths = [];
+      const nodeWidths = [];
+      let maxRowWidth = 0;
+      let maxRowCount = 1;
+      for (let d = 0; d <= maxDepth; d++) {
+        const arr = byDepth.get(d) || [];
+        maxRowCount = Math.max(maxRowCount, arr.length);
+        let maxLabelW = 0;
+        for (const o of arr) {
+          const tw = ctx.measureText(o.id).width;
+          if (tw > maxLabelW) maxLabelW = tw;
+        }
+        const nodeW = Math.max(minNodeW, Math.ceil(maxLabelW + 24));
+        nodeWidths[d] = nodeW;
+        const rowWidth = arr.length > 0 ? (arr.length * nodeW + (arr.length - 1) * colPadding) : 0;
+        rowWidths[d] = rowWidth;
+        if (rowWidth > maxRowWidth) maxRowWidth = rowWidth;
+      }
+
+      const totalWidth  = Math.max(scrollerW, marginX * 2 + maxRowWidth);
+      const totalHeight = Math.max(scrollerH, marginTop + (maxDepth + 1) * rowSpacing + marginBottom);
+
+      ctx = setCanvasSizeWH(canvasLayers, totalWidth, totalHeight);
+
+      layersScroller.scrollLeft = prevLeft;
+      layersScroller.scrollTop  = prevTop;
+
+      const occPos = new Map();
+
+      // For each depth row, place nodes horizontally centered in the available row area.
+      for (let d = 0; d <= maxDepth; d++) {
+        const arr = byDepth.get(d) || [];
+        arr.sort((a,b) => (orderIndexMap.get(a.id)||0) - (orderIndexMap.get(b.id)||0));
+        const nodeW = nodeWidths[d] || minNodeW;
+        const rowW = rowWidths[d] || 0;
+        const startX = marginX + Math.max(0, (maxRowWidth - rowW) / 2);
+        arr.forEach((o, i) => {
+          const xCenter = startX + i * (nodeW + colPadding) + nodeW / 2;
+          // vertical position depends on flipped state: when flipped, root (depth 0) should be at top
+          // When not flipped, depth 0 (root) should be at the top (small y). When flipped, invert.
+          const depthPosIndex = layeredFlipped ? (maxDepth - d) : d;
+          const y = marginTop + depthPosIndex * rowSpacing;
+          occPos.set(o.key, { x: xCenter, y, nodeW });
+        });
+      }
+
+      // edges: draw from the child (higher row / smaller y) down to the parent (lower row / larger y)
+      ctx.clearRect(0, 0, totalWidth, totalHeight);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(160,180,200,0.55)';
+      occEdges.forEach(e => {
+        // original edge entries are parent@d => child@(d+1)
+        const parentPos = occPos.get(e.sourceKey);
+        const childPos = occPos.get(e.targetKey);
+        if (!parentPos || !childPos) return;
+        // draw from child (top) to parent (bottom)
+        const a = childPos;
+        const b = parentPos;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        const midY = (a.y + b.y) / 2;
+        ctx.bezierCurveTo(a.x, midY, b.x, midY, b.x, b.y);
+        const edgeKeyASrc = String(e.sourceKey).split('@')[0];
+        const edgeKeyATgt = String(e.targetKey).split('@')[0];
+        const isEdgeHighlighted = hoverPathNodes.size > 0 && hoverPathNodes.has(edgeKeyASrc) && hoverPathNodes.has(edgeKeyATgt);
+        if (isEdgeHighlighted) { ctx.strokeStyle = 'rgba(120,200,255,0.95)'; ctx.lineWidth = 2.2; } else { ctx.strokeStyle = 'rgba(160,180,200,0.55)'; ctx.lineWidth = 1; }
+        ctx.stroke();
+      });
+
+      // nodes
+      ctx.font = "12px system-ui, Arial";
+      occurrences.forEach(o => {
+        const pos = occPos.get(o.key);
+        if (!pos) return;
+  const isLeaf = !(childrenMap.get(o.id) && childrenMap.get(o.id).length);
+  const fd_v = (window.feedData && window.feedData[o.id]) ? window.feedData[o.id] : null;
+  const completed_v = fd_v && fd_v.completed === true;
+  const color = completed_v ? 'rgba(140,150,155,0.95)' : (isLeaf ? leafHighlight : depthPalette[o.depth % depthPalette.length]);
+
+        const bw = pos.nodeW, bh = 28;
+        const bx = pos.x - bw/2;
+        const by = pos.y - bh/2;
+
+        occBoxes.push({ id: o.id, bx, by, bw, bh });
+
+        roundRect(ctx, bx, by, bw, bh, 6);
+        ctx.fillStyle = color;
+        ctx.fill();
+
+          const labelColorV = completed_v ? '#000000' : '#03181a';
+          ctx.fillStyle = labelColorV;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          try {
+            const labelText = formatNodeLabel(o.id);
+            ctx.fillText(labelText, pos.x, pos.y);
+            // no strikethrough for completed nodes
+          } catch (e) {
+            ctx.fillText(formatNodeLabel(o.id), pos.x, pos.y);
+          }
+
+        if (hoverNodeId && hoverNodeId === o.id) {
+          ctx.save();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(160,210,255,0.95)';
+          roundRect(ctx, bx, by, bw, bh, 6);
+          ctx.stroke();
+          ctx.shadowColor = 'rgba(160,210,255,0.6)';
+          ctx.shadowBlur = 12;
+          roundRect(ctx, bx, by, bw, bh, 6);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        const count = visitCounts.get(o.id) || 0;
+        if (count > 1) {
+          ctx.fillStyle = 'rgba(3,24,28,0.95)';
+          ctx.beginPath();
+          ctx.arc(bx + bw - 12, pos.y - 8, 10, 0, 2*Math.PI);
+          ctx.fill();
+          ctx.fillStyle = '#dfeaf6';
+          ctx.font = '11px system-ui, Arial';
+          ctx.fillText(String(count), bx + bw - 12, pos.y - 8);
+          ctx.font = '12px system-ui, Arial';
+        }
+      });
+
+      // level labels (left side of rows)
+      ctx.fillStyle = '#9fb3c8';
+      ctx.font = '13px system-ui, Arial';
+      // level labels (left side of rows) - respect flipped state
+      for (let d = 0; d <= maxDepth; d++) {
+        const depthPosIndex = layeredFlipped ? (maxDepth - d) : d;
+        const yCenter = marginTop + depthPosIndex * rowSpacing;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Level ' + d, 12, yCenter);
+      }
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function findOccurrenceAtLayer(x, y) {
+      for (let i = 0; i < occBoxes.length; i++) {
+        const { id, bx, by, bw, bh } = occBoxes[i];
+        if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
+          return { id };
+        }
+      }
+      return null;
+    }
+
+    canvasLayers.addEventListener('click', (ev) => {
+      if (suppressLayerClick) return;
+      const rect = canvasLayers.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const occ = findOccurrenceAtLayer(x, y);
+      if (occ) {
+        // Only highlight on click; do not change the global selection here
+        hoverNodeId = occ.id;
+        if (selectedId && hoverNodeId) hoverPathNodes = computeHoverPathNodes(selectedId, hoverNodeId); else hoverPathNodes = new Set();
+        if (isVisible(panelCircular)) drawTop();
+        drawLayers();
+      }
+    });
+
+    // canvas_top click handling respects showOnlySelected filter; clicking doesn't change selection
+    canvasTop.addEventListener('click', (ev) => {
+      if (!isVisible(panelCircular)) return;
+      const rect = canvasTop.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const hit = findNodeAtTop(x, y);
+      if (hit) {
+        // Only highlight on click; do not change the global selection here
+        hoverNodeId = hit.id;
+        if (selectedId && hoverNodeId) hoverPathNodes = computeHoverPathNodes(selectedId, hoverNodeId); else hoverPathNodes = new Set();
+        drawTop();
+      }
+    });
+
+    // circular reset: restore canonicalPositions into positions and redraw
+    function saveCanonicalPositions() {
+      canonicalPositions.clear();
+      layoutCircle(nodes, canonicalPositions); // compute canonical positions (uses canvasTop rect)
+    }
+
+    function restoreCanonicalPositions() {
+      if (canonicalPositions.size === 0) {
+        saveCanonicalPositions();
+      }
+      // keep selection; only reset positions used for rendering / dragging
+      positions = new Map(canonicalPositions);
+      drawTop();
+    }
+
+    // Render Node Logic into the Node Logic panel (preserve whitespace)
+    function renderNodeLogic(nodeLabel) {
+      const el = document.getElementById('node-logic-code');
+      if (!el) return;
+      if (!nodeLabel) {
+        el.textContent = 'No node selected.';
+        return;
+      }
+      // Find the node data by matching label -> feed.js uses labels as keys when parsed
+      const data = (window.feedData && window.feedData[nodeLabel]) ? window.feedData[nodeLabel] : null;
+      if (!data || !data.NodeLogic) {
+        el.textContent = 'No logic available for ' + formatNodeLabel(nodeLabel) + '.';
+        const lbl = document.getElementById('logic_toolbar_label'); if (lbl) lbl.textContent = '—';
+        return;
+      }
+      el.textContent = data.NodeLogic;
+      const lbl = document.getElementById('logic_toolbar_label'); if (lbl) lbl.textContent = formatNodeLabel(nodeLabel);
+
+      // Load corresponding section file dynamically (classic <script> injection). The section files
+      // live in ./sections/section_<id>.js and set window.SECTIONS["<id>"] = { notes, completed }.
+      // If the section is already loaded we use it directly; otherwise inject a script tag and
+      // then read the exported window.SECTIONS entry. This will update the Notes pane and also
+      // set the `completed` flag on the in-memory feedData entry so drawing code treats the node
+      // as completed until the page is reloaded.
+      (function loadSectionFor(id) {
+        if (!id) return;
+        // prefer numeric id stored in feed data
+        const fd = (window.feedData && window.feedData[id]) ? window.feedData[id] : null;
+        const numericId = fd && fd.id ? fd.id : id;
+        const sid = String(numericId);
+        window.__loadedSections = window.__loadedSections || {};
+        function applySection(sec) {
+          try {
+            const notesEl = document.getElementById('node-logic-alt');
+            if (notesEl) {
+              if (sec && typeof sec.notes === 'string') {
+                notesEl.textContent = sec.notes;
+              } else if (sec && typeof sec.notes === 'undefined') {
+                // Section file loaded but provides no notes field
+                notesEl.textContent = 'No notes available for ' + formatNodeLabel(id) + '.';
+              }
+            }
+            // update completed state in memory so renderers pick it up
+            if (sec && typeof sec.completed === 'boolean') {
+              window.feedData = window.feedData || {};
+              // If feed entry exists, set its completed flag to the section value
+              if (window.feedData[id]) {
+                window.feedData[id].completed = sec.completed;
+              } else if (window.feedData[fd && fd.label]) {
+                window.feedData[fd.label].completed = sec.completed;
+              }
+              // trigger redraws so the new completed state is visible immediately
+              drawTop();
+              if (isVisible(panelLayered)) drawLayers();
+            }
+          } catch (e) { /* noop */ }
+        }
+
+        // already loaded in cache?
+        if (window.__loadedSections[sid]) {
+          applySection(window.__loadedSections[sid]);
+          return;
+        }
+
+        // Is the section already present on window (maybe loaded by another mechanism)?
+        if (window.SECTIONS && window.SECTIONS[sid]) {
+          window.__loadedSections[sid] = window.SECTIONS[sid];
+          applySection(window.SECTIONS[sid]);
+          return;
+        }
+
+        // Inject script tag to load sections/section_<sid>.js
+        const script = document.createElement('script');
+        script.src = `sections/section_${sid}.js`;
+        script.async = true;
+        // on load, copy the exported object from window.SECTIONS
+        script.onload = () => {
+          try {
+            const sec = (window.SECTIONS && window.SECTIONS[sid]) ? window.SECTIONS[sid] : null;
+            if (sec) window.__loadedSections[sid] = sec;
+            applySection(sec);
+          } catch (e) { /* ignore */ }
+        };
+        script.onerror = () => {
+          // If file is not found or error occurred, ensure Notes pane shows a helpful message
+          const notesEl = document.getElementById('node-logic-alt');
+          if (notesEl) notesEl.textContent = 'No notes available for ' + formatNodeLabel(nodeLabel) + '.';
+        };
+        document.head.appendChild(script);
+      })(nodeLabel);
+    }
+
+    // Notes feature removed
+
+    // Render Node Meta into the Node Meta panel as an expandable list of tables -> columns
+    function renderNodeMeta(nodeLabel) {
+      const el = document.getElementById('node-meta-list');
+      if (!el) return;
+      el.innerHTML = '';
+      if (!nodeLabel) {
+        el.textContent = 'No node selected.';
+        return;
+      }
+      const data = (window.feedData && window.feedData[nodeLabel]) ? window.feedData[nodeLabel] : null;
+      if (!data || !Array.isArray(data.NodeMeta) || data.NodeMeta.length === 0) {
+        el.textContent = 'No metadata available for ' + formatNodeLabel(nodeLabel) + '.';
+        const lbl = document.getElementById('meta_toolbar_label'); if (lbl) lbl.textContent = '—';
+        return;
+      }
+
+  const lbl = document.getElementById('meta_toolbar_label'); if (lbl) lbl.textContent = formatNodeLabel(nodeLabel);
+
+      data.NodeMeta.forEach(([table, cols]) => {
+        const item = document.createElement('div');
+        item.className = 'meta-item';
+
+  const header = document.createElement('button');
+  header.type = 'button';
+  header.className = 'meta-toggle';
+  // expanded by default per request
+  header.setAttribute('aria-expanded', 'true');
+  header.textContent = table;
+
+  const colList = document.createElement('ul');
+  colList.className = 'meta-cols';
+  colList.style.display = 'block';
+        if (Array.isArray(cols)) {
+          cols.forEach(c => {
+            const li = document.createElement('li');
+            li.textContent = c;
+            colList.appendChild(li);
+          });
+        }
+
+        header.addEventListener('click', () => {
+          const open = header.getAttribute('aria-expanded') === 'true';
+          header.setAttribute('aria-expanded', String(!open));
+          colList.style.display = open ? 'none' : 'block';
+        });
+
+        item.appendChild(header);
+        item.appendChild(colList);
+        el.appendChild(item);
+      });
+    }
+
+    // Render the full Tables.js contents into the Tables tab as collapsible items (collapsed by default)
+    function renderTables() {
+      const container = document.getElementById('tables-list');
+      if (!container) return;
+      container.innerHTML = '';
+      const tables = Array.isArray(window.tables) ? window.tables : [];
+      const searchInput = document.getElementById('tables-search');
+      const query = searchInput && searchInput.value ? String(searchInput.value).trim().toLowerCase() : '';
+      if (tables.length === 0) {
+        container.textContent = 'No tables available.';
+        return;
+      }
+
+      // helper to escape html
+      function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+      function highlight(text, q) {
+        if (!q) return esc(text);
+        try {
+          const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + ')', 'ig');
+          return esc(text).replace(re, '<span class="highlight">$1</span>');
+        } catch (e) { return esc(text); }
+      }
+
+      // Filter tables by query (name or any column)
+      const visible = tables.filter(tbl => {
+        if (!query) return true;
+        const name = tbl && tbl.name ? String(tbl.name).toLowerCase() : '';
+        if (name.indexOf(query) !== -1) return true;
+        if (Array.isArray(tbl.columns)) {
+          for (const c of tbl.columns) {
+            const cn = c && c.name ? String(c.name).toLowerCase() : String(c).toLowerCase();
+            if (cn.indexOf(query) !== -1) return true;
+          }
+        }
+        return false;
+      });
+
+      visible.forEach(tbl => {
+        const item = document.createElement('div');
+        item.className = 'meta-item';
+
+        const header = document.createElement('button');
+        header.type = 'button';
+        header.className = 'meta-toggle';
+        // collapsed by default
+        header.setAttribute('aria-expanded', 'false');
+  const rawTname = tbl && tbl.name ? String(tbl.name) : '(unnamed)';
+  const tname = upperCaseString(rawTname);
+        // attach stable identifier for selection
+  // store raw name for identification but display capitalized name
+  item.dataset.tnameRaw = rawTname;
+  if (selectedTables.has(rawTname)) item.classList.add('table-selected');
+
+        // Highlight matches in the table name when query is present
+        header.innerHTML = highlight(tname, query);
+
+        const cols = document.createElement('ul');
+        cols.className = 'meta-cols';
+        cols.style.display = 'none';
+        if (Array.isArray(tbl.columns)) {
+          tbl.columns.forEach(c => {
+            const li = document.createElement('li');
+            const rawCname = c && c.name ? String(c.name) : String(c);
+            const cname = upperCaseString(rawCname);
+            li.innerHTML = highlight(cname, query);
+            cols.appendChild(li);
+          });
+        }
+
+        header.addEventListener('click', () => {
+          const expanded = header.getAttribute('aria-expanded') === 'true';
+          header.setAttribute('aria-expanded', String(!expanded));
+          cols.style.display = expanded ? 'none' : 'block';
+        });
+
+        // Right-click to open context menu for select/unselect
+        item.addEventListener('contextmenu', (ev) => {
+          try { ev.preventDefault(); } catch (e) {}
+          currentTablesContextTarget = { rawTname: rawTname, el: item };
+          if (tablesCtxToggle) tablesCtxToggle.textContent = selectedTables.has(rawTname) ? 'Unselect' : 'Select';
+          showCtxMenu(ev.pageX, ev.pageY);
+        });
+
+        item.appendChild(header);
+        item.appendChild(cols);
+        container.appendChild(item);
+      });
+    }
+
+    // toggle filter
+    function toggleShowOnlySelected() {
+      showOnlySelected = !showOnlySelected;
+      btnToggleFilter.setAttribute('aria-pressed', String(showOnlySelected));
+      btnToggleFilter.textContent = showOnlySelected ? 'Showing selected' : 'Show only selected';
+      // when filter toggles, update hover/hit testing and redraw
+      hoverNodeId = null;
+      drawTop();
+    }
+
+    // encapsulate circular reset work so it can be invoked elsewhere
+    function resetCircularLayout() {
+      // visual feedback: briefly mark pressed
+      if (btnResetCircle) {
+        btnResetCircle.classList.add('pressed');
+        setTimeout(() => btnResetCircle.classList.remove('pressed'), 180);
+      }
+      // recompute canonical positions at current canvas size then restore
+      setCanvasSize(canvasTop);
+      saveCanonicalPositions();
+      restoreCanonicalPositions();
+    }
+
+    btnResetCircle.addEventListener('click', (e) => {
+      resetCircularLayout();
+    });
+
+    btnToggleFilter.addEventListener('click', (e) => {
+      toggleShowOnlySelected();
+    });
+
+    // Tabs behavior
+    function activateTab(which) {
+  // which can be: 'layered' | 'circular' | 'node-logic' | 'node-meta'
+      tabLayeredBtn.setAttribute('aria-selected', String(which === 'layered'));
+      tabCircularBtn.setAttribute('aria-selected', String(which === 'circular'));
+      if (tabNodeLogicBtn) tabNodeLogicBtn.setAttribute('aria-selected', String(which === 'node-logic'));
+      if (tabNodeMetaBtn) tabNodeMetaBtn.setAttribute('aria-selected', String(which === 'node-meta'));
+
+      panelLayered.dataset.active  = String(which === 'layered');
+      panelCircular.dataset.active = String(which === 'circular');
+      if (panelNodeLogic) panelNodeLogic.dataset.active = String(which === 'node-logic');
+      if (panelNodeMeta) panelNodeMeta.dataset.active = String(which === 'node-meta');
+
+      // After switching, (re)size & redraw only the visible panel
+      resizeActive();
+
+      // If switching to the Tables tab, render the contents from Tables.js
+      if (which === 'node-meta') {
+        try { if (typeof renderTables === 'function') renderTables(); } catch (e) { /* noop */ }
+      }
+
+      // If switching to the circular tab and a node is already selected, reset the circular layout
+      try {
+        if (which === 'circular' && selectedId && typeof resetCircularLayout === 'function') {
+          resetCircularLayout();
+        }
+      } catch (e) { /* noop */ }
+    }
+
+  tabLayeredBtn.addEventListener('click', () => activateTab('layered'));
+  tabCircularBtn.addEventListener('click', () => activateTab('circular'));
+  if (tabNodeLogicBtn) tabNodeLogicBtn.addEventListener('click', () => activateTab('node-logic'));
+  if (tabNodeMetaBtn) tabNodeMetaBtn.addEventListener('click', () => activateTab('node-meta'));
+
+  // Wire Tables search input
+  (function wireTablesSearch() {
+    const input = document.getElementById('tables-search');
+    if (!input) return;
+    let t = null;
+    input.addEventListener('input', () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => { try { renderTables(); } catch (e) {} }, 160);
+    });
+    // clear on search cancel (x button) to restore full list
+    input.addEventListener('search', () => { try { renderTables(); } catch (e) {} });
+  })();
+
+    // Keyboard: Left/Right to switch tabs
+    // collect available tab buttons in DOM order for keyboard navigation
+    const tabButtons = [tabLayeredBtn, tabCircularBtn];
+    if (tabNodeLogicBtn) tabButtons.push(tabNodeLogicBtn);
+    if (tabNodeMetaBtn) tabButtons.push(tabNodeMetaBtn);
+
+    tabButtons.forEach((btn, idx, arr) => {
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight') { e.preventDefault(); const next = arr[idx+1] || arr[0]; next.focus(); next.click(); }
+        if (e.key === 'ArrowLeft')  { e.preventDefault(); const prev = arr[idx-1] || arr[arr.length-1]; prev.focus(); prev.click(); }
+      });
+    });
+
+    // Summary
+    function populateSummary(nodesArr, edgesArr) {
+      const el = document.getElementById('summary');
+      const deg = new Map(nodesArr.map(n => [n.id, 0]));
+      edgesArr.forEach(e => deg.set(e.target, (deg.get(e.target) || 0) + 1));
+      const top = [...deg.entries()].sort((a,b) => b[1]-a[1]).slice(0, 10);
+      el.innerHTML = `
+        <div><strong>Nodes:</strong> ${nodesArr.length}</div>
+        <div><strong>Edges:</strong> ${edgesArr.length}</div>
+        <div style="margin-top:6px;"><strong>Top in-degree:</strong></div>
+        <ol>${top.map(([id, d]) => `<li>${id}: ${d}</li>`).join('')}</ol>
+      `;
+    }
+
+    // Init from feed.js
+    function initFromFeedJS() {
+      const data = (typeof window !== 'undefined') ? window.feedData : null;
+      if (!data) {
+        console.error('feed.js not loaded or window.feedData missing.');
+        return;
+      }
+      const parsed = parseFromFeedData(data);
+      nodes = parsed.nodes;
+      edges = parsed.edges;
+      buildChildrenMap();
+      // Preload section files to apply completed states before initial rendering
+      (function preloadAllSections() {
+        window.__loadedSections = window.__loadedSections || {};
+        Object.keys(window.feedData).forEach(key => {
+          try {
+            const entry = window.feedData[key];
+            const sid = entry && entry.id ? String(entry.id) : String(key);
+            if (window.__loadedSections[sid] || (window.SECTIONS && window.SECTIONS[sid])) return;
+            const script = document.createElement('script');
+            script.src = `sections/section_${sid}.js`;
+            script.async = true;
+            script.onload = () => {
+              try {
+                const sec = (window.SECTIONS && window.SECTIONS[sid]) ? window.SECTIONS[sid] : null;
+                if (sec) {
+                  window.__loadedSections[sid] = sec;
+                  if (typeof sec.completed === 'boolean') {
+                    if (window.feedData[key]) window.feedData[key].completed = sec.completed;
+                  }
+                }
+              } catch (e) { /* noop */ }
+            };
+            script.onerror = () => { /* ignore missing files */ };
+            document.head.appendChild(script);
+          } catch (e) { /* noop */ }
+        });
+      })();
+      // Prepare initial circular positions (draw only when the circular tab is visible)
+      setCanvasSize(canvasTop);
+      layoutCircle(nodes, positions);
+      // capture canonical positions for reset
+      saveCanonicalPositions();
+
+      populateSummary(nodes, edges);
+      populateNodeList(nodes);
+
+      // ensure circular layout canonical positions are set at load
+      try { if (typeof resetCircularLayout === 'function') resetCircularLayout(); } catch (e) { /* noop */ }
+
+      // apply initial layered orientation according to toolbar default (Horizontal now default)
+      try { if (typeof setLayerOrientation === 'function') setLayerOrientation(btnLayerHorizontal && btnLayerHorizontal.getAttribute('aria-pressed') === 'true' ? 'horizontal' : 'vertical'); } catch (e) { /* noop */ }
+
+      // Start with layered tab active
+      activateTab('layered');
+      // render tables view
+      try { if (typeof renderTables === 'function') renderTables(); } catch (e) { /* noop */ }
+    }
+
+    // Utility: select all text inside a container element
+    function selectAllIn(el) {
+      if (!el) return;
+      // if it's an input/textarea, use select()
+      if (el.select && typeof el.select === 'function') {
+        el.select();
+        return;
+      }
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    // Utility: produce a consistent display label for a node identifier.
+    // nodeKey may be one of:
+    //  - the feedData key (e.g. 'A_Child_11')
+    //  - the numeric id string (e.g. '32')
+    //  - the human label (e.g. 'A-Child-11')
+    // This helper attempts to resolve the feed entry robustly and returns "<id>) <label>" when possible.
+    function formatNodeLabel(nodeKey) {
+      try {
+        if (!window.feedData) return String(nodeKey);
+        // If already a feed key
+        if (nodeKey && typeof nodeKey === 'string' && window.feedData[nodeKey]) {
+          const fd = window.feedData[nodeKey];
+          const lab = (fd && fd.label) ? fd.label : nodeKey;
+          return (fd && fd.id) ? String(fd.id) + ') ' + lab : lab;
+        }
+        // Otherwise try to find by numeric id or by label across feedData
+        for (const key of Object.keys(window.feedData)) {
+          const fd = window.feedData[key];
+          if (!fd) continue;
+          if (fd.id && String(fd.id) === String(nodeKey)) {
+            const lab = fd.label || key;
+            return String(fd.id) + ') ' + lab;
+          }
+          if (fd.label && fd.label === nodeKey) {
+            const lab = fd.label || key;
+            return (fd.id ? String(fd.id) + ') ' + lab : lab);
+          }
+        }
+        // fallback: return the raw input
+        return String(nodeKey);
+      } catch (e) {
+        return String(nodeKey);
+      }
+    }
+
+    // Wire toolbar Select All buttons (per-pane). Select only the code-block contents so
+    // clicking the toolbar button text itself won't become part of the selection.
+    const btnLogicSelectAllLeft = document.getElementById('btn-logic-selectall-left');
+    const btnLogicSelectAllRight = document.getElementById('btn-logic-selectall-right');
+    const btnMetaSelectAll = document.getElementById('btn-meta-selectall');
+    function unselectAll() { try { const sel = window.getSelection(); sel.removeAllRanges(); } catch(e) { /* noop */ } }
+    if (btnLogicSelectAllLeft) btnLogicSelectAllLeft.addEventListener('click', (ev) => {
+      ev.stopPropagation(); ev.preventDefault();
+      const codeEl = document.getElementById('node-logic-code');
+      const pressed = btnLogicSelectAllLeft.getAttribute('aria-pressed') === 'true';
+      if (!pressed) {
+        selectAllIn(codeEl);
+        btnLogicSelectAllLeft.setAttribute('aria-pressed', 'true');
+        btnLogicSelectAllLeft.textContent = 'Unselect All';
+      } else {
+        unselectAll();
+        btnLogicSelectAllLeft.setAttribute('aria-pressed', 'false');
+        btnLogicSelectAllLeft.textContent = 'Select All';
+      }
+    });
+    if (btnLogicSelectAllRight) btnLogicSelectAllRight.addEventListener('click', (ev) => {
+      ev.stopPropagation(); ev.preventDefault();
+      const codeEl = document.getElementById('node-logic-alt');
+      const pressed = btnLogicSelectAllRight.getAttribute('aria-pressed') === 'true';
+      if (!pressed) {
+        selectAllIn(codeEl);
+        btnLogicSelectAllRight.setAttribute('aria-pressed', 'true');
+        btnLogicSelectAllRight.textContent = 'Unselect All';
+      } else {
+        unselectAll();
+        btnLogicSelectAllRight.setAttribute('aria-pressed', 'false');
+        btnLogicSelectAllRight.textContent = 'Select All';
+      }
+    });
+    if (btnMetaSelectAll) btnMetaSelectAll.addEventListener('click', () => {
+      const el = document.getElementById('node-meta-list');
+      const pressed = btnMetaSelectAll.getAttribute('aria-pressed') === 'true';
+      if (!pressed) {
+        // expand all meta items so hidden columns are included in selection
+        const toggles = el.querySelectorAll('.meta-toggle');
+        toggles.forEach(t => { t.setAttribute('aria-expanded','true'); const ul = t.nextElementSibling; if (ul) ul.style.display = 'block'; });
+        selectAllIn(el);
+        btnMetaSelectAll.setAttribute('aria-pressed', 'true');
+        btnMetaSelectAll.textContent = 'Unselect All';
+      } else {
+        unselectAll();
+        btnMetaSelectAll.setAttribute('aria-pressed', 'false');
+        btnMetaSelectAll.textContent = 'Select All';
+      }
+    });
+
+    // Reset Select All button state when the selection changes externally
+    document.addEventListener('selectionchange', () => {
+      const sel = window.getSelection();
+      const empty = !sel || sel.rangeCount === 0 || String(sel).length === 0;
+      if (empty) {
+        if (btnLogicSelectAllLeft) { btnLogicSelectAllLeft.setAttribute('aria-pressed', 'false'); btnLogicSelectAllLeft.textContent = 'Select All'; }
+        if (btnLogicSelectAllRight) { btnLogicSelectAllRight.setAttribute('aria-pressed', 'false'); btnLogicSelectAllRight.textContent = 'Select All'; }
+        if (btnMetaSelectAll)  { btnMetaSelectAll.setAttribute('aria-pressed', 'false');  btnMetaSelectAll.textContent = 'Select All'; }
+      }
+    });
+
+    // Accordion toggle handlers for the two logic panes. Initialize defaults according to data-expanded.
+    const togglePrimary = document.getElementById('toggle-logic-primary');
+    const toggleSecondary = document.getElementById('toggle-logic-secondary');
+    const panePrimaryWrapper = document.getElementById('node-logic-primary-content');
+    const paneSecondaryWrapper = document.getElementById('node-logic-secondary-content');
+    function setPaneExpanded(toggleBtn, wrapperEl, expanded) {
+      if (!toggleBtn || !wrapperEl) return;
+      toggleBtn.setAttribute('aria-expanded', String(expanded));
+      // visual glyph: rotate or use arrow characters
+      toggleBtn.textContent = expanded ? '▾' : '▸';
+      wrapperEl.style.display = expanded ? 'block' : 'none';
+    }
+    if (togglePrimary) togglePrimary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = togglePrimary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(togglePrimary, panePrimaryWrapper, !cur); if (headingPrimary) headingPrimary.setAttribute('aria-expanded', String(!cur)); });
+    if (toggleSecondary) toggleSecondary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = toggleSecondary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(toggleSecondary, paneSecondaryWrapper, !cur); if (headingSecondary) headingSecondary.setAttribute('aria-expanded', String(!cur)); });
+  // Also allow the header text to toggle the pane (larger click target). Keep aria-expanded in sync.
+  const headingPrimary = document.getElementById('heading-logic-primary');
+  const headingSecondary = document.getElementById('heading-logic-secondary');
+  if (headingPrimary) headingPrimary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = togglePrimary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(togglePrimary, panePrimaryWrapper, !cur); headingPrimary.setAttribute('aria-expanded', String(!cur)); });
+  if (headingSecondary) headingSecondary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = toggleSecondary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(toggleSecondary, paneSecondaryWrapper, !cur); headingSecondary.setAttribute('aria-expanded', String(!cur)); });
+    // Initialize according to data-expanded attributes on the parent panes
+    try {
+      const primParent = document.getElementById('node-logic-primary');
+      const secParent = document.getElementById('node-logic-secondary');
+      const primDefault = primParent && primParent.getAttribute('data-expanded') === 'true';
+      const secDefault = secParent && secParent.getAttribute('data-expanded') === 'true';
+  setPaneExpanded(togglePrimary, panePrimaryWrapper, primDefault);
+  if (headingPrimary) headingPrimary.setAttribute('aria-expanded', String(primDefault));
+  setPaneExpanded(toggleSecondary, paneSecondaryWrapper, secDefault);
+  if (headingSecondary) headingSecondary.setAttribute('aria-expanded', String(secDefault));
+    } catch (e) { /* noop */ }
+
+    // Context menu for nodes (circular & layered) — shows View Logic / View Meta and does NOT change graph topology
+    const ctxMenu = document.createElement('div');
+    ctxMenu.id = 'node-context-menu';
+    ctxMenu.style.position = 'absolute';
+    ctxMenu.style.display = 'none';
+    ctxMenu.style.background = '#071018';
+    ctxMenu.style.border = '1px solid #1c2633';
+    ctxMenu.style.padding = '6px';
+    ctxMenu.style.borderRadius = '6px';
+    ctxMenu.style.boxShadow = '0 6px 18px rgba(0,0,0,0.6)';
+    ctxMenu.style.zIndex = 99999;
+    document.body.appendChild(ctxMenu);
+
+    ctxMenu.addEventListener('click', (e) => { e.stopPropagation(); });
+
+    function hideContextMenu() { ctxMenu.style.display = 'none'; ctxMenu.innerHTML = ''; }
+
+    function resolveNodeKey(nodeKey) {
+      if (!nodeKey) return null;
+      // If a full node object was passed
+      if (typeof nodeKey === 'object' && nodeKey !== null) return nodeKey;
+      // Try to find by id or label in the nodes array
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (!n) continue;
+        if (n.id === nodeKey || n.label === nodeKey) return n;
+      }
+      return null;
+    }
+
+    function showContextMenuAt(x, y, nodeKey) {
+      hideContextMenu();
+      const node = resolveNodeKey(nodeKey);
+      // prefer the label (used as feed key) when available
+      const nodeLabel = node && node.label ? node.label : nodeKey;
+      // Select button (explicit selection via context menu)
+      const btnSelect = document.createElement('button');
+      btnSelect.type = 'button';
+      btnSelect.textContent = 'Select';
+      btnSelect.className = 'ctx-btn';
+      btnSelect.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        try { setSelection(node && node.id ? node.id : nodeLabel); } catch(e) {}
+        hideContextMenu();
+      });
+
+      // View Logic: render logic for this node and open the Logic tab, but do NOT change global selection
+      const btnLogic = document.createElement('button');
+      btnLogic.type = 'button';
+      btnLogic.textContent = 'Section';
+      btnLogic.className = 'ctx-btn';
+      btnLogic.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        try { renderNodeLogic(node && node.id ? node.id : nodeLabel); } catch(e) {}
+        try { activateTab('node-logic'); } catch(e) {}
+        hideContextMenu();
+      });
+
+
+      const btnCopy = document.createElement('button');
+      btnCopy.type = 'button';
+      btnCopy.textContent = 'Copy Name';
+      btnCopy.className = 'ctx-btn';
+      btnCopy.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        // nodeLabel may be prefixed for display with "N) name" elsewhere; we want the raw node id/label
+        const rawName = (node && node.id) ? node.id : nodeLabel;
+        try {
+          // Use Clipboard API when available
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(String(rawName));
+          } else {
+            // Fallback: use a temporary textarea
+            const ta = document.createElement('textarea');
+            ta.value = String(rawName);
+            ta.style.position = 'fixed'; ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch (e) { /* noop */ }
+            document.body.removeChild(ta);
+          }
+          // small transient visual feedback in the menu
+          const prev = btnCopy.textContent;
+          btnCopy.textContent = 'Copied';
+          setTimeout(() => { try { btnCopy.textContent = prev; } catch(e){} }, 900);
+        } catch (e) {
+          // ignore clipboard errors silently
+        }
+        hideContextMenu();
+      });
+
+  // Append Select first so it's the primary action
+  ctxMenu.appendChild(btnSelect);
+  ctxMenu.appendChild(btnLogic);
+  // Notes removed from context menu
+  ctxMenu.appendChild(btnCopy);
+      ctxMenu.style.left = x + 'px';
+      ctxMenu.style.top = y + 'px';
+      ctxMenu.style.display = 'block';
+
+      // adjust if off-screen
+      requestAnimationFrame(() => {
+        const r = ctxMenu.getBoundingClientRect();
+        if (r.right > window.innerWidth) ctxMenu.style.left = (window.innerWidth - r.width - 8) + 'px';
+        if (r.bottom > window.innerHeight) ctxMenu.style.top = (window.innerHeight - r.height - 8) + 'px';
+      });
+    }
+
+    // Compute node ids along path from root to target (inclusive) so edges can be highlighted
+    function computeHoverPathNodes(rootId, targetId) {
+      const path = [];
+      let found = false;
+      const visited = new Set();
+      function dfs(node) {
+        if (found) return;
+        visited.add(node);
+        path.push(node);
+        if (node === targetId) { found = true; return; }
+        const kids = childrenMap.get(node) || [];
+        for (const k of kids) {
+          if (visited.has(k)) continue;
+          dfs(k);
+          if (found) return;
+        }
+        path.pop();
+      }
+      if (!rootId || !targetId) return new Set();
+      dfs(rootId);
+      return new Set(path);
+    }
+
+    // hide on outside click or escape
+    document.addEventListener('click', hideContextMenu);
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideContextMenu(); });
+
+    // right-click handling on circular canvas
+    canvasTop.addEventListener('contextmenu', (ev) => {
+      if (!isVisible(panelCircular)) return;
+      ev.preventDefault();
+      const rect = canvasTop.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const hit = findNodeAtTop(x, y);
+      if (hit) {
+        // show menu at cursor (page coordinates)
+        showContextMenuAt(ev.pageX, ev.pageY, hit.id);
+      } else {
+        hideContextMenu();
+      }
+    });
+
+    // right-click handling on layered canvas
+    canvasLayers.addEventListener('contextmenu', (ev) => {
+      if (!isVisible(panelLayered)) return;
+      ev.preventDefault();
+      const rect = canvasLayers.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const occ = findOccurrenceAtLayer(x, y);
+      if (occ) {
+        showContextMenuAt(ev.pageX, ev.pageY, occ.id);
+      } else {
+        hideContextMenu();
+      }
+    });
+
+    // Boot
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initFromFeedJS);
+    } else {
+      initFromFeedJS();
+    }
+  </script>
+</body>
+</html>
