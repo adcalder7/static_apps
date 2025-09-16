@@ -346,7 +346,10 @@
   <section id="panel-layered" class="tab-panel" role="tabpanel" aria-labelledby="tab-layered" data-active="false">
           <div class="graph-wrap" style="position:relative;">
             <div class="layered-toolbar panel-toolbar" id="layered_toolbar" aria-hidden="false">
-              <span id="layered_toolbar_label" class="toolbar-label">—</span>
+              <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;">
+                <span id="layered_toolbar_label" class="toolbar-label">—</span>
+                <span id="layered_toolbar_sub" class="toolbar-sub" style="font-size:12px;color:#9fb3c8;">&nbsp;</span>
+              </div>
               <button id="btn-layer-horizontal" title="Horizontal layout" aria-pressed="true">Horizontal</button>
               <button id="btn-layer-vertical" title="Vertical layout" aria-pressed="false">Vertical</button>
               <button id="btn-layer-flip" title="Flip layout" aria-pressed="false">Flip</button>
@@ -362,7 +365,10 @@
           <div class="graph-wrap" style="position:relative;">
             <!-- Outer toolbar remains here -->
             <div class="logic-toolbar panel-toolbar" id="logic_toolbar" aria-hidden="false">
-              <span id="section_toolbar_label" class="toolbar-label">—</span>
+              <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;">
+                <span id="section_toolbar_label" class="toolbar-label">—</span>
+                <span id="section_toolbar_sub" class="toolbar-sub" style="font-size:12px;color:#9fb3c8;">&nbsp;</span>
+              </div>
               <!-- main toolbar actions can remain here; per-request, select-all moved into each inner pane -->
             </div>
 
@@ -385,14 +391,31 @@
                 </div>
               </div>
 
-              <div class="logic-inner-pane" id="node-logic-secondary" style="position:relative; width:100%; margin-top:18px;" data-expanded="true">
+              <!-- Java pane (same features as Pseudocode) -->
+              <div class="logic-inner-pane" id="node-logic-java" style="position:relative; width:100%; margin-top:12px;" data-expanded="false">
+                <div class="inner-header" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="accordion-toggle" id="toggle-logic-java" aria-expanded="false" title="Toggle" style="font-size:18px;">▸</button>
+                    <button id="heading-logic-java" class="accordion-heading" aria-controls="node-logic-java-code" aria-expanded="false" style="background:transparent;border:none;color:#cfe0f5;font-size:14px;cursor:pointer;padding:6px 8px;">Java</button>
+                  </div>
+                </div>
+                <div id="node-logic-java-content" class="inner-content" style="margin-top:8px; display:none;">
+                  <div class="small-toolbar" style="margin-bottom:8px; display:flex; gap:8px; justify-content:flex-end;">
+                    <button id="btn-logic-selectall-java" class="toolbar-btn small">Select All</button>
+                    <button id="btn-logic-copyall-java" class="toolbar-btn small" title="Copy all java code to clipboard">Copy All</button>
+                  </div>
+                  <div id="node-logic-java-code" class="code-block">Select a node on the left to view its Java code.</div>
+                </div>
+              </div>
+
+              <div class="logic-inner-pane" id="node-logic-secondary" style="position:relative; width:100%; margin-top:18px;" data-expanded="false">
                 <div class="inner-header" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
                   <div style="display:flex; align-items:center; gap:8px;">
                     <button class="accordion-toggle" id="toggle-logic-secondary" aria-expanded="true" title="Toggle" style="font-size:18px;">▾</button>
                     <button id="heading-logic-secondary" class="accordion-heading" aria-controls="node-logic-alt" aria-expanded="true" style="background:transparent;border:none;color:#cfe0f5;font-size:14px;cursor:pointer;padding:6px 8px;">Notes</button>
                   </div>
                 </div>
-                <div id="node-logic-secondary-content" class="inner-content" style="margin-top:8px; display:block;">
+                <div id="node-logic-secondary-content" class="inner-content" style="margin-top:8px; display:none;">
                   <div class="small-toolbar" style="margin-bottom:8px; display:flex; gap:8px; justify-content:flex-end;">
                     <button id="btn-logic-selectall-right" class="toolbar-btn small">Select All</button>
                     <button id="btn-logic-copyall-right" class="toolbar-btn small" title="Copy all notes to clipboard">Copy All</button>
@@ -429,7 +452,10 @@
           <div class="graph-wrap" style="position:relative;">
             <!-- toolbar -->
             <div class="circular-toolbar panel-toolbar" id="circular_toolbar" aria-hidden="false">
-              <span id="circular_toolbar_label" class="toolbar-label">—</span>
+              <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;">
+                <span id="circular_toolbar_label" class="toolbar-label">—</span>
+                <span id="circular_toolbar_sub" class="toolbar-sub" style="font-size:12px;color:#9fb3c8;">&nbsp;</span>
+              </div>
               <button id="btn-reset-circle" title="Reset circular layout">Reset</button>
               <button id="btn-toggle-filter" title="Show only selected nodes" aria-pressed="false">Show only selected</button>
             </div>
@@ -1873,6 +1899,19 @@
                 const elLogic = document.getElementById('node-logic-code');
                 if (elLogic) elLogic.textContent = sec.logic;
               }
+              // If the section provides 'java' content, populate the Java pane
+              if (sec && sec.java && typeof sec.java.logic === 'string') {
+                const elJava = document.getElementById('node-logic-java-code');
+                if (elJava) elJava.textContent = sec.java.logic;
+              } else {
+                const elJava = document.getElementById('node-logic-java-code');
+                if (elJava) elJava.textContent = 'Could not find data in the section...';
+              }
+              // set toolbar sub-labels to java.name when available
+              const javaName = (sec && sec.java && sec.java.name) ? String(sec.java.name) : '';
+              try { const s1 = document.getElementById('layered_toolbar_sub'); if (s1) s1.textContent = javaName; } catch(e){}
+              try { const s2 = document.getElementById('circular_toolbar_sub'); if (s2) s2.textContent = javaName; } catch(e){}
+              try { const s3 = document.getElementById('section_toolbar_sub'); if (s3) s3.textContent = javaName; } catch(e){}
             } catch (e) { /* noop */ }
           } catch (e) { /* noop */ }
         }
@@ -2381,12 +2420,37 @@
       const text = el ? el.textContent : '';
       copyTextToClipboard(text).then(()=>{ showCopyToast(); }).catch((err)=>{ showCopyToast('Copy failed'); console.error(err); });
     });
+    // Java pane copy/select wiring
+    const btnLogicSelectAllJava = document.getElementById('btn-logic-selectall-java');
+    const btnLogicCopyAllJava = document.getElementById('btn-logic-copyall-java');
+    if (btnLogicSelectAllJava) btnLogicSelectAllJava.addEventListener('click', (ev) => {
+      ev.stopPropagation(); ev.preventDefault();
+      const codeEl = document.getElementById('node-logic-java-code');
+      const pressed = btnLogicSelectAllJava.getAttribute('aria-pressed') === 'true';
+      if (!pressed) {
+        selectAllIn(codeEl);
+        btnLogicSelectAllJava.setAttribute('aria-pressed', 'true');
+        btnLogicSelectAllJava.textContent = 'Unselect All';
+      } else {
+        unselectAll();
+        btnLogicSelectAllJava.setAttribute('aria-pressed', 'false');
+        btnLogicSelectAllJava.textContent = 'Select All';
+      }
+    });
+    if (btnLogicCopyAllJava) btnLogicCopyAllJava.addEventListener('click', (ev) => {
+      ev.stopPropagation(); ev.preventDefault();
+      const el = document.getElementById('node-logic-java-code');
+      const text = el ? el.textContent : '';
+      copyTextToClipboard(text).then(()=>{ showCopyToast(); }).catch((err)=>{ showCopyToast('Copy failed'); console.error(err); });
+    });
 
     // Accordion toggle handlers for the two logic panes. Initialize defaults according to data-expanded.
-    const togglePrimary = document.getElementById('toggle-logic-primary');
-    const toggleSecondary = document.getElementById('toggle-logic-secondary');
-    const panePrimaryWrapper = document.getElementById('node-logic-primary-content');
-    const paneSecondaryWrapper = document.getElementById('node-logic-secondary-content');
+  const togglePrimary = document.getElementById('toggle-logic-primary');
+  const toggleSecondary = document.getElementById('toggle-logic-secondary');
+  const toggleJava = document.getElementById('toggle-logic-java');
+  const panePrimaryWrapper = document.getElementById('node-logic-primary-content');
+  const paneSecondaryWrapper = document.getElementById('node-logic-secondary-content');
+  const paneJavaWrapper = document.getElementById('node-logic-java-content');
     function setPaneExpanded(toggleBtn, wrapperEl, expanded) {
       if (!toggleBtn || !wrapperEl) return;
       toggleBtn.setAttribute('aria-expanded', String(expanded));
@@ -2394,12 +2458,15 @@
       toggleBtn.textContent = expanded ? '▾' : '▸';
       wrapperEl.style.display = expanded ? 'block' : 'none';
     }
-    if (togglePrimary) togglePrimary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = togglePrimary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(togglePrimary, panePrimaryWrapper, !cur); if (headingPrimary) headingPrimary.setAttribute('aria-expanded', String(!cur)); });
-    if (toggleSecondary) toggleSecondary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = toggleSecondary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(toggleSecondary, paneSecondaryWrapper, !cur); if (headingSecondary) headingSecondary.setAttribute('aria-expanded', String(!cur)); });
+  if (togglePrimary) togglePrimary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = togglePrimary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(togglePrimary, panePrimaryWrapper, !cur); if (headingPrimary) headingPrimary.setAttribute('aria-expanded', String(!cur)); });
+  if (toggleSecondary) toggleSecondary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = toggleSecondary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(toggleSecondary, paneSecondaryWrapper, !cur); if (headingSecondary) headingSecondary.setAttribute('aria-expanded', String(!cur)); });
+  if (toggleJava) toggleJava.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = toggleJava.getAttribute('aria-expanded') === 'true'; setPaneExpanded(toggleJava, paneJavaWrapper, !cur); if (headingJava) headingJava.setAttribute('aria-expanded', String(!cur)); });
   // Also allow the header text to toggle the pane (larger click target). Keep aria-expanded in sync.
   const headingPrimary = document.getElementById('heading-logic-primary');
   const headingSecondary = document.getElementById('heading-logic-secondary');
+  const headingJava = document.getElementById('heading-logic-java');
   if (headingPrimary) headingPrimary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = togglePrimary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(togglePrimary, panePrimaryWrapper, !cur); headingPrimary.setAttribute('aria-expanded', String(!cur)); });
+  if (headingJava) headingJava.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = toggleJava.getAttribute('aria-expanded') === 'true'; setPaneExpanded(toggleJava, paneJavaWrapper, !cur); headingJava.setAttribute('aria-expanded', String(!cur)); });
   if (headingSecondary) headingSecondary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = toggleSecondary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(toggleSecondary, paneSecondaryWrapper, !cur); headingSecondary.setAttribute('aria-expanded', String(!cur)); });
     // Initialize according to data-expanded attributes on the parent panes
     try {
