@@ -161,6 +161,8 @@
       text-overflow: clip;
       max-width: none;
     }
+    /* make layered toolbar label clearly clickable when present */
+    #layered_toolbar_label { cursor: pointer; }
     .panel-toolbar button[aria-pressed="true"] {
       background: rgba(70,130,200,0.18);
       color: #fff;
@@ -341,6 +343,7 @@
   <section id="panel-layered" class="tab-panel" role="tabpanel" aria-labelledby="tab-layered" data-active="false">
           <div class="graph-wrap" style="position:relative;">
             <div class="layered-toolbar panel-toolbar" id="layered_toolbar" aria-hidden="false">
+              <span id="layered_toolbar_label" class="toolbar-label">—</span>
               <button id="btn-layer-horizontal" title="Horizontal layout" aria-pressed="true">Horizontal</button>
               <button id="btn-layer-vertical" title="Vertical layout" aria-pressed="false">Vertical</button>
               <button id="btn-layer-flip" title="Flip layout" aria-pressed="false">Flip</button>
@@ -593,6 +596,7 @@
   const btnLayerHorizontal = document.getElementById('btn-layer-horizontal');
   const btnLayerVertical = document.getElementById('btn-layer-vertical');
   const btnLayerFlip = document.getElementById('btn-layer-flip');
+  const lblLayered = document.getElementById('layered_toolbar_label');
   // orientation state (will be set during init)
   let layeredOrientation = 'vertical';
   // flip state: when true the head/root appears at the opposite side (top vs bottom, left vs right)
@@ -815,6 +819,35 @@
       } catch (e) { /* noop */ }
       try {
         if (typeof renderNodeMeta === 'function') renderNodeMeta(rootId);
+      } catch (e) { /* noop */ }
+      // update layered toolbar label to show "id — label"
+      try {
+        if (lblLayered) {
+          if (!rootId) {
+            lblLayered.textContent = '—';
+          } else {
+            const fd = (window.feedData && window.feedData[rootId]) ? window.feedData[rootId] : null;
+            const numericId = fd && (fd.id || fd.id === 0) ? String(fd.id) : String(rootId);
+            const label = fd && fd.label ? String(fd.label) : String(rootId);
+            // Use formatNodeLabel output but ensure it uses the numeric prefix + ') ' style
+            const display = (fd && fd.id) ? (String(fd.id) + ') ' + label) : label;
+            lblLayered.textContent = display;
+            // clicking the label copies exactly the displayed text to clipboard
+            lblLayered.onclick = async () => {
+              try {
+                const payload = display;
+                if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                  await navigator.clipboard.writeText(payload);
+                } else {
+                  const ta = document.createElement('textarea'); ta.value = payload; ta.style.position = 'fixed'; ta.style.left = '-9999px'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+                }
+                // tiny visual feedback
+                lblLayered.classList.add('pressed');
+                setTimeout(() => lblLayered.classList.remove('pressed'), 220);
+              } catch (e) { console.warn('copy failed', e); }
+            };
+          }
+        }
       } catch (e) { /* noop */ }
   // Notes panel removed
     }
