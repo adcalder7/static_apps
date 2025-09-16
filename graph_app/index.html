@@ -162,7 +162,10 @@
       max-width: none;
     }
     /* make layered toolbar label clearly clickable when present */
-    #layered_toolbar_label { cursor: pointer; }
+  #layered_toolbar_label { cursor: pointer; }
+  #logic_toolbar_label { cursor: pointer; }
+  /* small pressed feedback for clickable labels */
+  .toolbar-label.pressed { opacity: 0.7; transform: translateY(1px); }
     .panel-toolbar button[aria-pressed="true"] {
       background: rgba(70,130,200,0.18);
       color: #fff;
@@ -374,8 +377,9 @@
                   </div>
                 </div>
                 <div id="node-logic-primary-content" class="inner-content" style="margin-top:8px; display:none;">
-                  <div class="small-toolbar" style="margin-bottom:8px;">
+                  <div class="small-toolbar" style="margin-bottom:8px; display:flex; gap:8px; justify-content:flex-end;">
                     <button id="btn-logic-selectall-left" class="toolbar-btn small">Select All</button>
+                    <button id="btn-logic-copyall-left" class="toolbar-btn small" title="Copy all pseudocode to clipboard">Copy All</button>
                   </div>
                   <div id="node-logic-code" class="code-block">Select a node on the left to view its pseudocode.</div>
                 </div>
@@ -389,8 +393,9 @@
                   </div>
                 </div>
                 <div id="node-logic-secondary-content" class="inner-content" style="margin-top:8px; display:block;">
-                  <div class="small-toolbar" style="margin-bottom:8px;">
+                  <div class="small-toolbar" style="margin-bottom:8px; display:flex; gap:8px; justify-content:flex-end;">
                     <button id="btn-logic-selectall-right" class="toolbar-btn small">Select All</button>
+                    <button id="btn-logic-copyall-right" class="toolbar-btn small" title="Copy all notes to clipboard">Copy All</button>
                   </div>
                   <div id="node-logic-alt" class="code-block">Secondary pane (additional notes or alternate view).</div>
                 </div>
@@ -558,6 +563,7 @@
             // visual feedback: briefly mark pressed
             btnCopyTables.classList.add('pressed');
             setTimeout(() => btnCopyTables.classList.remove('pressed'), 220);
+            try { if (typeof showCopyToast === 'function') showCopyToast(); } catch(e) {}
           } catch (e) {
             console.error('Copy failed', e);
           }
@@ -844,6 +850,7 @@
                 // tiny visual feedback
                 lblLayered.classList.add('pressed');
                 setTimeout(() => lblLayered.classList.remove('pressed'), 220);
+                try { if (typeof showCopyToast === 'function') showCopyToast(); } catch(e) {}
               } catch (e) { console.warn('copy failed', e); }
             };
           }
@@ -2329,6 +2336,51 @@
       }
     });
 
+    // Small toast for copy feedback
+    (function createCopyToast(){
+      const style = document.createElement('style');
+      style.textContent = `
+      #copy-toast { position: fixed; right: 18px; bottom: 18px; background: rgba(40,40,40,0.95); color: #dff3ff; padding: 8px 12px; border-radius:6px; box-shadow: 0 2px 8px rgba(0,0,0,0.6); font-size:13px; z-index:9999; opacity:0; transition:opacity .25s ease; }
+      #copy-toast.show { opacity: 1; }
+      `;
+      document.head.appendChild(style);
+      const t = document.createElement('div'); t.id = 'copy-toast'; t.textContent = 'Copied to clipboard'; document.body.appendChild(t);
+    })();
+
+    function showCopyToast(msg='Copied to clipboard'){
+      const t = document.getElementById('copy-toast'); if(!t) return;
+      t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(()=>{ t.classList.remove('show'); }, 1600);
+    }
+
+    // Helper: copy text to clipboard with textarea fallback
+    function copyTextToClipboard(text){
+      if (!text) return Promise.reject(new Error('no-text'));
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+      return new Promise((resolve, reject) => {
+        try {
+          const ta = document.createElement('textarea'); ta.style.position='fixed'; ta.style.left='-9999px'; ta.value = text; document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); document.body.removeChild(ta); if (ok) resolve(); else reject(new Error('exec-copy-failed'));
+        } catch (e) { reject(e); }
+      });
+    }
+
+    // Wire Copy All buttons
+    const btnLogicCopyAllLeft = document.getElementById('btn-logic-copyall-left');
+    const btnLogicCopyAllRight = document.getElementById('btn-logic-copyall-right');
+    if (btnLogicCopyAllLeft) btnLogicCopyAllLeft.addEventListener('click', (ev) => {
+      ev.stopPropagation(); ev.preventDefault();
+      const el = document.getElementById('node-logic-code');
+      const text = el ? el.textContent : '';
+      copyTextToClipboard(text).then(()=>{ showCopyToast(); }).catch((err)=>{ showCopyToast('Copy failed'); console.error(err); });
+    });
+    if (btnLogicCopyAllRight) btnLogicCopyAllRight.addEventListener('click', (ev) => {
+      ev.stopPropagation(); ev.preventDefault();
+      const el = document.getElementById('node-logic-alt');
+      const text = el ? el.textContent : '';
+      copyTextToClipboard(text).then(()=>{ showCopyToast(); }).catch((err)=>{ showCopyToast('Copy failed'); console.error(err); });
+    });
+
     // Accordion toggle handlers for the two logic panes. Initialize defaults according to data-expanded.
     const togglePrimary = document.getElementById('toggle-logic-primary');
     const toggleSecondary = document.getElementById('toggle-logic-secondary');
@@ -2444,6 +2496,7 @@
           // small transient visual feedback in the menu
           const prev = btnCopy.textContent;
           btnCopy.textContent = 'Copied';
+          try { if (typeof showCopyToast === 'function') showCopyToast(); } catch(e) {}
           setTimeout(() => { try { btnCopy.textContent = prev; } catch(e){} }, 900);
         } catch (e) {
           // ignore clipboard errors silently
