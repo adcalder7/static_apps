@@ -949,11 +949,13 @@
             const id = n.id;
             const fd = (window.feedData && window.feedData[id]) ? window.feedData[id] : null;
             const label = fd && fd.label ? String(fd.label) : String(id);
+            // include numeric feed id (if present) so numeric searches match
+            const numericIdStr = fd && (fd.id || fd.id === 0) ? String(fd.id) : '';
             const kids = (childrenMap.get(id) || []).map(k => {
               const kfd = (window.feedData && window.feedData[k]) ? window.feedData[k] : null;
               return kfd && kfd.label ? String(kfd.label) : String(k);
             }).join(' ');
-            index.set(id, (String(id) + ' ' + label + ' ' + kids).toLowerCase());
+            index.set(id, (String(id) + ' ' + label + ' ' + numericIdStr + ' ' + kids).toLowerCase());
           }
         } catch (e) { /* noop */ }
         return index;
