@@ -362,7 +362,7 @@
           <div class="graph-wrap" style="position:relative;">
             <!-- Outer toolbar remains here -->
             <div class="logic-toolbar panel-toolbar" id="logic_toolbar" aria-hidden="false">
-              <span id="logic_toolbar_label" class="toolbar-label">—</span>
+              <span id="section_toolbar_label" class="toolbar-label">—</span>
               <!-- main toolbar actions can remain here; per-request, select-all moved into each inner pane -->
             </div>
 
@@ -429,6 +429,7 @@
           <div class="graph-wrap" style="position:relative;">
             <!-- toolbar -->
             <div class="circular-toolbar panel-toolbar" id="circular_toolbar" aria-hidden="false">
+              <span id="circular_toolbar_label" class="toolbar-label">—</span>
               <button id="btn-reset-circle" title="Reset circular layout">Reset</button>
               <button id="btn-toggle-filter" title="Show only selected nodes" aria-pressed="false">Show only selected</button>
             </div>
@@ -603,6 +604,8 @@
   const btnLayerVertical = document.getElementById('btn-layer-vertical');
   const btnLayerFlip = document.getElementById('btn-layer-flip');
   const lblLayered = document.getElementById('layered_toolbar_label');
+  const lblCircular = document.getElementById('circular_toolbar_label');
+  const lblSection = document.getElementById('section_toolbar_label');
   // orientation state (will be set during init)
   let layeredOrientation = 'vertical';
   // flip state: when true the head/root appears at the opposite side (top vs bottom, left vs right)
@@ -826,35 +829,33 @@
       try {
         if (typeof renderNodeMeta === 'function') renderNodeMeta(rootId);
       } catch (e) { /* noop */ }
-      // update layered toolbar label to show "id — label"
+      // update toolbar labels to show "id) label"
       try {
-        if (lblLayered) {
-          if (!rootId) {
-            lblLayered.textContent = '—';
-          } else {
-            const fd = (window.feedData && window.feedData[rootId]) ? window.feedData[rootId] : null;
-            const numericId = fd && (fd.id || fd.id === 0) ? String(fd.id) : String(rootId);
-            const label = fd && fd.label ? String(fd.label) : String(rootId);
-            // Use formatNodeLabel output but ensure it uses the numeric prefix + ') ' style
-            const display = (fd && fd.id) ? (String(fd.id) + ') ' + label) : label;
-            lblLayered.textContent = display;
-            // clicking the label copies exactly the displayed text to clipboard
-            lblLayered.onclick = async () => {
-              try {
-                const payload = display;
-                if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-                  await navigator.clipboard.writeText(payload);
-                } else {
-                  const ta = document.createElement('textarea'); ta.value = payload; ta.style.position = 'fixed'; ta.style.left = '-9999px'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-                }
-                // tiny visual feedback
-                lblLayered.classList.add('pressed');
-                setTimeout(() => lblLayered.classList.remove('pressed'), 220);
-                try { if (typeof showCopyToast === 'function') showCopyToast(); } catch(e) {}
-              } catch (e) { console.warn('copy failed', e); }
-            };
-          }
+        const fd = (window.feedData && window.feedData[rootId]) ? window.feedData[rootId] : null;
+        const numericId = fd && (fd.id || fd.id === 0) ? String(fd.id) : String(rootId);
+        const label = fd && fd.label ? String(fd.label) : String(rootId);
+        const display = (!rootId) ? '—' : ((fd && fd.id) ? (String(fd.id) + ') ' + label) : label);
+        // helper to wire a label element with the same copy-on-click behavior
+        function wireLabel(el){
+          if (!el) return;
+          el.textContent = display;
+          el.onclick = async () => {
+            try {
+              const payload = display;
+              if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                await navigator.clipboard.writeText(payload);
+              } else {
+                const ta = document.createElement('textarea'); ta.value = payload; ta.style.position = 'fixed'; ta.style.left = '-9999px'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch(e){} document.body.removeChild(ta);
+              }
+              el.classList.add('pressed');
+              setTimeout(() => el.classList.remove('pressed'), 220);
+              try { if (typeof showCopyToast === 'function') showCopyToast(); } catch(e) {}
+            } catch (e) { /* noop */ }
+          };
         }
+        wireLabel(lblLayered);
+        wireLabel(lblCircular);
+        wireLabel(lblSection);
       } catch (e) { /* noop */ }
   // Notes panel removed
     }
@@ -1812,7 +1813,7 @@
       // We no longer read NodeLogic from feed.js. Instead the pseudocode (logic) comes from
       // the corresponding section file: sections/section_<id>.js which sets
       // window.SECTIONS[<id>] = { notes, completed, logic }.
-      const lbl = document.getElementById('logic_toolbar_label'); if (lbl) lbl.textContent = formatNodeLabel(nodeLabel);
+  const lblSec = document.getElementById('section_toolbar_label'); if (lblSec) lblSec.textContent = formatNodeLabel(nodeLabel);
 
       // Try to use any already-loaded section logic synchronously; otherwise show a helpful message
       try {
