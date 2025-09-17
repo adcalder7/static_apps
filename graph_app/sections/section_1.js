@@ -4,3 +4,5 @@ window.SECTIONS['1'] = {
 	logic: `Some Logic`,
 	completed: true,
 };
+
+window.SECTIONS['1'].status = 'pending';

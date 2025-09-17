@@ -1,5 +1,7 @@
 window.SECTIONS = window.SECTIONS || {};
 window.SECTIONS['15'] = {
-	notes: `CycleDetect notes: track recursion stack and colors (white/gray/black) for efficient cycle detection in directed graphs.`,
-	completed: true,
+	notes: `Testing... BackProp note: describe forward pass, loss computation, and gradient updates with tips for avoiding vanishing gradients.`,
+	completed: false,
 };
+
+window.SECTIONS['15'].status = 'blocked';

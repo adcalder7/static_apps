@@ -663,6 +663,116 @@
       return ctx;
     }
 
+    // Helper: resolve a node's status from the corresponding section file (fallback to 'pending')
+  const STATUS_ICON = { pending: '⏳', blocked: '🚫', done: '✔️' };
+    function getNodeStatus(nodeKey) {
+      try {
+        // Build candidate section ids for this node by inspecting feedData and the nodeKey itself
+        const candidates = new Set();
+        // Direct feedData lookup (common case)
+        if (window.feedData && window.feedData[nodeKey]) {
+          const fd = window.feedData[nodeKey];
+          if (fd && (fd.id || fd.id === 0)) candidates.add(String(fd.id));
+        }
+        // If nodeKey is numeric-like, include it
+        if (nodeKey !== null && nodeKey !== undefined) candidates.add(String(nodeKey));
+        // Try to find by scanning feedData for matching id or label
+        if (window.feedData) {
+          for (const k of Object.keys(window.feedData)) {
+            const fd = window.feedData[k];
+            if (!fd) continue;
+            if (fd.id != null && String(fd.id) === String(nodeKey)) candidates.add(String(fd.id));
+            if (fd.label != null && String(fd.label) === String(nodeKey)) {
+              if (fd.id != null) candidates.add(String(fd.id)); else candidates.add(String(k));
+            }
+          }
+        }
+
+        // Check known loaded sections and the global SECTIONS object for status
+        for (const sid of candidates) {
+          try {
+            if (window.__loadedSections && window.__loadedSections[sid] && typeof window.__loadedSections[sid].status === 'string') {
+              return String(window.__loadedSections[sid].status).toLowerCase();
+            }
+            if (window.SECTIONS && window.SECTIONS[sid] && typeof window.SECTIONS[sid].status === 'string') {
+              return String(window.SECTIONS[sid].status).toLowerCase();
+            }
+          } catch (e) { /* noop */ }
+        }
+
+        // As a last resort, scan all entries in window.SECTIONS for any status mapping that might apply
+        if (window.SECTIONS) {
+          for (const k of Object.keys(window.SECTIONS)) {
+            try {
+              const entry = window.SECTIONS[k];
+              if (entry && typeof entry.status === 'string') {
+                // if this SECTION key matches one of our candidates, return it
+                if (candidates.has(String(k))) return String(entry.status).toLowerCase();
+                // otherwise continue — we don't attempt to guess mapping across disparate ids
+              }
+            } catch (e) { /* noop */ }
+          }
+        }
+
+        return 'pending';
+      } catch (e) { return 'pending'; }
+    }
+
+    // Fetch a section file and, if it contains `.status`, populate window.__loadedSections and update UI labels.
+    function fetchSectionStatus(sid){
+      return new Promise((resolve) => {
+        try {
+          if (!sid) return resolve();
+          // If already loaded and has status, nothing to do
+          if (window.__loadedSections && window.__loadedSections[sid] && typeof window.__loadedSections[sid].status === 'string') return resolve();
+          if (window.SECTIONS && window.SECTIONS[sid] && typeof window.SECTIONS[sid].status === 'string') {
+            // already present
+            if (!window.__loadedSections) window.__loadedSections = {};
+            window.__loadedSections[sid] = window.SECTIONS[sid];
+            updateNodeListIconsForSid(sid);
+            return resolve();
+          }
+          // fetch the raw file and try to extract status assignments
+          const url = `sections/section_${sid}.js?cb=${Date.now()}`;
+          fetch(url, { cache: 'no-store' }).then(r => {
+            if (!r.ok) return resolve();
+            return r.text();
+          }).then(txt => {
+            if (!txt) return resolve();
+            // look for patterns like status: 'pending' or .status = 'done'
+            const m1 = txt.match(/status\s*:\s*(['"])(pending|blocked|done)\1/i);
+            const m2 = txt.match(/\.status\s*=\s*(['"])(pending|blocked|done)\1/i);
+            const found = (m1 && m1[2]) ? m1[2] : ((m2 && m2[2]) ? m2[2] : null);
+            if (found) {
+              window.SECTIONS = window.SECTIONS || {};
+              window.__loadedSections = window.__loadedSections || {};
+              const cur = window.SECTIONS[sid] || {};
+              cur.status = String(found).toLowerCase();
+              window.SECTIONS[sid] = cur;
+              window.__loadedSections[sid] = cur;
+              updateNodeListIconsForSid(sid);
+            }
+            return resolve();
+          }).catch(() => resolve());
+        } catch (e) { resolve(); }
+      });
+    }
+
+    function updateNodeListIconsForSid(sid){
+      try {
+        if (!sid) return;
+        document.querySelectorAll('#node-list li').forEach(li => {
+          if (!li || !li.dataset) return;
+          if (String(li.dataset.sid) !== String(sid)) return;
+          const id = li.dataset.nodeId;
+          const labelSpan = li.querySelector('.label');
+          if (!labelSpan) return;
+          // rebuild the visible display label with current status
+          try { labelSpan.textContent = getDisplayNodeLabel(id); } catch(e) { /* noop */ }
+        });
+      } catch (e) { /* noop */ }
+    }
+
     function resizeActive() {
       // Only render the active/visible panel to avoid 0-size measurements
       if (isVisible(panelCircular) && isVisible(canvasTop)) {
@@ -706,23 +816,77 @@
       btnSectionRefresh.classList.add('pressed');
       setTimeout(() => btnSectionRefresh.classList.remove('pressed'), 220);
       try {
-        // Clear any in-memory caches for the currently selected section so renderNodeLogic will re-fetch
+        // Determine sid for selectedId
         if (selectedId) {
-          // determine sid same way renderNodeLogic/loadSectionFor does
           const fd = (window.feedData && window.feedData[selectedId]) ? window.feedData[selectedId] : null;
           const numericId = fd && fd.id ? fd.id : selectedId;
           const sid = String(numericId);
-          try { if (window.__loadedSections) delete window.__loadedSections[sid]; } catch(e) {}
-          try { if (window.SECTIONS) delete window.SECTIONS[sid]; } catch(e) {}
+          // Ensure global containers exist
+          window.SECTIONS = window.SECTIONS || {};
+          window.__loadedSections = window.__loadedSections || {};
+          // Remove the cached entry for this sid so we force a reload
+          try { if (window.__loadedSections && window.__loadedSections[sid]) delete window.__loadedSections[sid]; } catch(e) {}
+          try { if (window.SECTIONS && window.SECTIONS[sid]) delete window.SECTIONS[sid]; } catch(e) {}
+          // Load the section script first (so window.SECTIONS is populated) then apply
+          await new Promise((res) => {
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = `sections/section_${sid}.js?cb=${Date.now()}`;
+            script.onload = () => { try { if (window.SECTIONS && window.SECTIONS[sid]) window.__loadedSections[sid] = window.SECTIONS[sid]; } catch(e){} res(); };
+            script.onerror = () => res();
+            document.head.appendChild(script);
+          });
+          // Now run the same render logic (applySection will pick up new window.SECTIONS)
+          if (typeof renderNodeLogic === 'function') renderNodeLogic(selectedId);
         }
-        // Re-run the same render logic which will inject the script with cache-busting param
-        if (typeof renderNodeLogic === 'function') renderNodeLogic(selectedId);
         try { showCopyToast('Section refreshed'); } catch(e) {}
       } catch (e) {
         console.error('Section refresh failed', e);
         try { showCopyToast('Refresh failed'); } catch(e) {}
       }
     });
+
+    // Preload all section_x.js files referenced in feedData so window.SECTIONS is populated before UI init
+    async function preloadSectionsFromFeed(){
+      try {
+        if (!window.feedData) return;
+        // If window.SECTIONS already contains at least as many keys as feedData,
+        // assume sections are populated and avoid reloading. This covers the case
+        // where an external mechanism already injected the section scripts.
+        try {
+          const feedCount = Object.keys(window.feedData || {}).length;
+          const sectionsCount = window.SECTIONS ? Object.keys(window.SECTIONS).length : 0;
+          if (sectionsCount >= feedCount && feedCount > 0) return;
+        } catch (e) { /* noop */ }
+        const sids = new Set();
+        for (const k of Object.keys(window.feedData)) {
+          const fd = window.feedData[k];
+          if (!fd) continue;
+          const sid = fd && (fd.id || fd.id === 0) ? String(fd.id) : String(k);
+          sids.add(sid);
+        }
+        window.SECTIONS = window.SECTIONS || {};
+        window.__loadedSections = window.__loadedSections || {};
+        // load sequentially to avoid flooding. Give up early if preload takes too long.
+        const start = Date.now();
+        const maxBootMs = 5000; // don't block more than 5s by default
+        for (const sid of sids) {
+          // skip if already populated
+          if (window.SECTIONS[sid] || window.__loadedSections[sid]) continue;
+          // create script tag to load section synchronously-ish
+          await new Promise((res) => {
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = `sections/section_${sid}.js?cb=${Date.now()}`;
+            script.onload = () => { try { if (window.SECTIONS && window.SECTIONS[sid]) window.__loadedSections[sid] = window.SECTIONS[sid]; } catch(e){} res(); };
+            script.onerror = () => res();
+            document.head.appendChild(script);
+          });
+          // if boot blocking exceeds the threshold, stop waiting for remaining sections
+          if (Date.now() - start > maxBootMs) break;
+        }
+      } catch (e) { /* noop */ }
+    }
 
     // --- data/state ---
     let nodes = [];
@@ -892,10 +1056,11 @@
         // helper to wire a label element with the same copy-on-click behavior
         function wireLabel(el){
           if (!el) return;
-          el.textContent = display;
+          // show icon-prefixed label visually, but copy the raw label (no icon)
+          try { el.textContent = getDisplayNodeLabel(rootId); } catch(e) { el.textContent = display; }
           el.onclick = async () => {
             try {
-              const payload = display;
+              const payload = formatNodeLabel(rootId);
               if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
                 await navigator.clipboard.writeText(payload);
               } else {
@@ -936,6 +1101,12 @@
   function createItem(id, ancestors = new Set()) {
         const li = document.createElement('li');
         li.dataset.nodeId = id;
+        // attach a numeric section id (sid) to the li for background status loading
+        try {
+          const fdTmp = (window.feedData && window.feedData[id]) ? window.feedData[id] : null;
+          const sidTmp = fdTmp && fdTmp.id ? String(fdTmp.id) : String(id);
+          li.dataset.sid = sidTmp;
+        } catch(e) { li.dataset.sid = String(id); }
         li.tabIndex = 0;
 
         const row = document.createElement('div');
@@ -965,15 +1136,16 @@
         const labelSpan = document.createElement('span');
         labelSpan.className = 'label';
         // Prefer the numeric id from feedData when available, show it alongside the human label
-        const txt = formatNodeLabel(id);
-        labelSpan.textContent = txt;
-        labelSpan.title = txt;
+  const txt = formatNodeLabel(id); // raw label used for copy/search logic
+  const displayLabel = getDisplayNodeLabel(id); // visual label with icon
+  labelSpan.textContent = displayLabel;
+  labelSpan.title = txt;
         // If a search is active, highlight matches inside the visible label text
         const query = (searchBox && searchBox.value) ? String(searchBox.value).trim() : '';
         if (query.length > 0) {
           // simple case-insensitive substring highlight on the visible label
           const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig');
-          const parts = txt.split(re);
+          const parts = displayLabel.split(re);
           if (parts.length > 1) {
             labelSpan.innerHTML = parts.map(p => re.test(p) ? `<span class="highlight">${p}</span>` : escapeHtml(p)).join('');
           }
@@ -1014,6 +1186,23 @@
       }
 
       sorted.forEach(n => ul.appendChild(createItem(n.id)));
+
+      // Background: prefetch section status for each visible node and update icon when available.
+      (function prefetchStatuses(){
+        try {
+          const sids = new Set();
+          document.querySelectorAll('#node-list li').forEach(li => { if (li && li.dataset && li.dataset.sid) sids.add(li.dataset.sid); });
+          // sequentially fetch with small delay to avoid hammering
+          let i = 0;
+          const list = Array.from(sids);
+          function next(){
+            if (i >= list.length) return;
+            const sid = list[i++];
+            fetchSectionStatus(sid).finally(() => setTimeout(next, 60));
+          }
+          next();
+        } catch(e) { /* noop */ }
+      })();
 
       // Respect active search: do NOT change the current selection when a filter is active.
       const activeQuery = (searchBox && searchBox.value) ? String(searchBox.value).trim() : '';
@@ -1262,22 +1451,26 @@
 
         // draw label (show numeric feed id when available)
         try {
-          const labelText = formatNodeLabel(n.id);
+            const status = getNodeStatus(n.id);
+            const icon = STATUS_ICON[status] || STATUS_ICON.pending;
+            const labelText = icon + formatNodeLabel(n.id);
           const labelColorTop = completed_top ? '#000000' : '#cfe0f5';
           ctx.fillStyle = labelColorTop;
           ctx.font = '12px system-ui, Arial';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
           const textX = p.x;
-          const textY = p.y + radius + 6;
-          ctx.fillText(labelText, textX, textY);
+            const textY = p.y + radius + 6;
+            // Draw icon directly before the formatted label (e.g. '⏳16) BackProp')
+            ctx.fillText(labelText, textX, textY);
           // no strikethrough; completed nodes are indicated by gray fill and black label for readability
         } catch (e) {
           ctx.fillStyle = '#cfe0f5';
           ctx.font = '12px system-ui, Arial';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
-          ctx.fillText(formatNodeLabel(n.id), p.x, p.y + radius + 6);
+            const fallbackIcon = STATUS_ICON.pending;
+            ctx.fillText(fallbackIcon + '' + formatNodeLabel(n.id), p.x, p.y + radius + 6);
         }
       });
     }
@@ -1627,13 +1820,17 @@
           ctx.textBaseline = 'middle';
           try {
             const labelText = formatNodeLabel(o.id);
+            const status = getNodeStatus(o.id);
+            const icon = STATUS_ICON[status] || STATUS_ICON.pending;
+            const fullLabel = icon + labelText;
             // label color: use black for completed nodes for better contrast
             const labelColorH = completed_h ? '#000000' : '#03181a';
             ctx.fillStyle = labelColorH;
-            ctx.fillText(labelText, pos.x, pos.y);
+            ctx.fillText(fullLabel, pos.x, pos.y);
             // no strikethrough for completed nodes; visual indicator is the gray box and black label
           } catch (e) {
-            ctx.fillText(formatNodeLabel(o.id), pos.x, pos.y);
+            const fallbackIcon = STATUS_ICON.pending;
+            ctx.fillText(fallbackIcon + formatNodeLabel(o.id), pos.x, pos.y);
           }
 
           if (hoverNodeId && hoverNodeId === o.id) {
@@ -1781,11 +1978,14 @@
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           try {
-            const labelText = formatNodeLabel(o.id);
+            const status = getNodeStatus(o.id);
+            const icon = STATUS_ICON[status] || STATUS_ICON.pending;
+            const labelText = icon + formatNodeLabel(o.id);
             ctx.fillText(labelText, pos.x, pos.y);
             // no strikethrough for completed nodes
           } catch (e) {
-            ctx.fillText(formatNodeLabel(o.id), pos.x, pos.y);
+            const fallbackIcon = STATUS_ICON.pending;
+            ctx.fillText(fallbackIcon + '' + formatNodeLabel(o.id), pos.x, pos.y);
           }
 
         if (hoverNodeId && hoverNodeId === o.id) {
@@ -1905,7 +2105,7 @@
       // We no longer read NodeLogic from feed.js. Instead the pseudocode (logic) comes from
       // the corresponding section file: sections/section_<id>.js which sets
       // window.SECTIONS[<id>] = { notes, completed, logic }.
-  const lblSec = document.getElementById('section_toolbar_label'); if (lblSec) lblSec.textContent = formatNodeLabel(nodeLabel);
+  const lblSec = document.getElementById('section_toolbar_label'); if (lblSec) lblSec.textContent = getDisplayNodeLabel(nodeLabel);
 
       // Try to use any already-loaded section logic synchronously; otherwise show a helpful message
       try {
@@ -1978,6 +2178,8 @@
               // trigger redraws so the new completed state is visible immediately
               drawTop();
               if (isVisible(panelLayered)) drawLayers();
+              // update left-panel icons for this sid if status present
+              try { updateNodeListIconsForSid(sid); } catch(e) { /* noop */ }
             }
             // If the section provides 'logic' (pseudocode), update the Node Logic pane
             try {
@@ -2032,6 +2234,7 @@
             const sec = (window.SECTIONS && window.SECTIONS[sid]) ? window.SECTIONS[sid] : null;
             if (sec) window.__loadedSections[sid] = sec;
             applySection(sec);
+            try { updateNodeListIconsForSid(sid); } catch(e) { /* noop */ }
           } catch (e) { /* ignore */ }
         };
         script.onerror = () => {
@@ -2056,12 +2259,12 @@
       }
       const data = (window.feedData && window.feedData[nodeLabel]) ? window.feedData[nodeLabel] : null;
       if (!data || !Array.isArray(data.NodeMeta) || data.NodeMeta.length === 0) {
-        el.textContent = 'No metadata available for ' + formatNodeLabel(nodeLabel) + '.';
+        el.textContent = 'No metadata available for ' + getDisplayNodeLabel(nodeLabel) + '.';
         const lbl = document.getElementById('meta_toolbar_label'); if (lbl) lbl.textContent = '—';
         return;
       }
 
-  const lbl = document.getElementById('meta_toolbar_label'); if (lbl) lbl.textContent = formatNodeLabel(nodeLabel);
+  const lbl = document.getElementById('meta_toolbar_label'); if (lbl) lbl.textContent = getDisplayNodeLabel(nodeLabel);
 
       data.NodeMeta.forEach(([table, cols]) => {
         const item = document.createElement('div');
@@ -2302,40 +2505,16 @@
       nodes = parsed.nodes;
       edges = parsed.edges;
       buildChildrenMap();
-      // Preload section files to apply completed states before initial rendering
-      (function preloadAllSections() {
-        window.__loadedSections = window.__loadedSections || {};
-        Object.keys(window.feedData).forEach(key => {
-          try {
-            const entry = window.feedData[key];
-            const sid = entry && entry.id ? String(entry.id) : String(key);
-            if (window.__loadedSections[sid] || (window.SECTIONS && window.SECTIONS[sid])) return;
-            const script = document.createElement('script');
-            script.src = `sections/section_${sid}.js`;
-            script.async = true;
-            script.onload = () => {
-              try {
-                const sec = (window.SECTIONS && window.SECTIONS[sid]) ? window.SECTIONS[sid] : null;
-                if (sec) {
-                  window.__loadedSections[sid] = sec;
-                  if (typeof sec.completed === 'boolean') {
-                    if (window.feedData[key]) window.feedData[key].completed = sec.completed;
-                  }
-                }
-              } catch (e) { /* noop */ }
-            };
-            script.onerror = () => { /* ignore missing files */ };
-            document.head.appendChild(script);
-          } catch (e) { /* noop */ }
-        });
-      })();
+      // NOTE: section preloading is handled at boot (before calling initFromFeedJS)
+      // to ensure window.SECTIONS is available and avoid race conditions. Do not
+      // perform another non-blocking preload here.
       // Prepare initial circular positions (draw only when the circular tab is visible)
       setCanvasSize(canvasTop);
       layoutCircle(nodes, positions);
       // capture canonical positions for reset
       saveCanonicalPositions();
 
-      populateSummary(nodes, edges);
+  populateSummary(nodes, edges);
       populateNodeList(nodes);
 
       // ensure circular layout canonical positions are set at load
@@ -2398,6 +2577,17 @@
       } catch (e) {
         return String(nodeKey);
       }
+    }
+
+    // Return a visual label for UI display that includes the status icon prefix.
+    // This should NOT be used for copy-to-clipboard payloads; use formatNodeLabel() for that.
+    function getDisplayNodeLabel(nodeKey) {
+      try {
+        const base = formatNodeLabel(nodeKey);
+        const status = getNodeStatus(nodeKey);
+        const icon = STATUS_ICON[status] || STATUS_ICON.pending;
+        return icon + base;
+      } catch (e) { return formatNodeLabel(nodeKey); }
     }
 
     // Wire toolbar Select All buttons (per-pane). Select only the code-block contents so
@@ -2733,11 +2923,30 @@
       }
     });
 
-    // Boot
+    // Boot sequence: ensure section files are preloaded and window.SECTIONS is
+    // populated before we run the main init logic. This avoids icon flicker and
+    // race conditions where drawing happens before section status is known.
+    async function bootApp() {
+      try {
+        // preload sections referenced in feedData (populates window.SECTIONS / __loadedSections)
+        if (typeof preloadSectionsFromFeed === 'function') {
+          await preloadSectionsFromFeed();
+        }
+      } catch (e) {
+        // continue even if preload fails; initFromFeedJS will handle missing data
+        console.warn('Section preload failed or was partially completed', e);
+      }
+      try {
+        initFromFeedJS();
+      } catch (e) {
+        console.error('initFromFeedJS failed', e);
+      }
+    }
+
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initFromFeedJS);
+      document.addEventListener('DOMContentLoaded', bootApp);
     } else {
-      initFromFeedJS();
+      bootApp();
     }
   </script>
 </body>
