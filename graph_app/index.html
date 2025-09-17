@@ -1053,6 +1053,37 @@
         return result;
       }
 
+      // Special filter: when user queries like "5)" treat the value before the closing paren as an exact id match.
+      function filterNodeIdsByExactId(rawKey) {
+        const key = String(rawKey || '').trim();
+        if (!key) return null;
+        const matching = new Set();
+        try {
+          for (const n of nodes) {
+            const id = n.id;
+            const fd = (window.feedData && window.feedData[id]) ? window.feedData[id] : null;
+            // match numeric id stored in feedData
+            if (fd && (fd.id || fd.id === 0) && String(fd.id) === key) { matching.add(id); continue; }
+            // match raw node id
+            if (String(id) === key) { matching.add(id); continue; }
+            // also match visible formatted label (e.g. "5) Name") start
+            try {
+              const fmt = formatNodeLabel(id);
+              if (String(fmt).toLowerCase().startsWith(String(key).toLowerCase() + ')')) { matching.add(id); continue; }
+            } catch (e) { /* noop */ }
+          }
+        } catch (e) { /* noop */ }
+        if (matching.size === 0) return new Set();
+        // include parents so that matching children are visible in the nested list
+        const parentsToShow = new Set();
+        for (const id of matching) {
+          for (const [p, kids] of childrenMap.entries()) {
+            if (kids && kids.indexOf(id) !== -1) parentsToShow.add(p);
+          }
+        }
+        return new Set([...matching, ...parentsToShow]);
+      }
+
       // Wire search input: on input, rebuild index and repopulate list with filtered matches
       (function wireSearch() {
         const input = document.getElementById('node-search');
@@ -1065,9 +1096,16 @@
             populateNodeList(nodes);
             return;
           }
+          // If query looks like an exact id (e.g. "5)"), use exact-id matching first
+          const m = q.trim().match(/^([^)]+)\)\s*$/);
+          let ids = null;
+          if (m) {
+            const key = m[1].trim();
+            ids = filterNodeIdsByExactId(key);
+          }
           // rebuild index if nodes changed length
           if (!index || index.size !== nodes.length) index = buildSearchIndex();
-          const ids = filterNodeIdsByQuery(q, index);
+          if (!ids) ids = filterNodeIdsByQuery(q, index);
           if (!ids) { populateNodeList(nodes); return; }
           // Build a filtered nodes array preserving original ordering
           const filtered = nodes.filter(n => ids.has(n.id));
@@ -1874,7 +1912,27 @@
             const notesEl = document.getElementById('node-logic-alt');
             if (notesEl) {
               if (sec && typeof sec.notes === 'string') {
+                // show the interpreted value immediately
                 notesEl.textContent = sec.notes;
+                // Try to fetch the raw section source and extract the literal notes string
+                (async function tryShowRawNotes(){
+                  try {
+                    const fdLocal = (window.feedData && window.feedData[id]) ? window.feedData[id] : null;
+                    const numericLocal = fdLocal && fdLocal.id ? fdLocal.id : id;
+                    const fetchUrl = `sections/section_${String(numericLocal)}.js?cb=${Date.now()}`;
+                    const res = await fetch(fetchUrl, { cache: 'no-store' });
+                    if (!res.ok) return;
+                    const txt = await res.text();
+                    // find notes: '...' or "..." or `...`
+                    const m = txt.match(/notes\s*:\s*(["'`])([\s\S]*?)\1/);
+                    if (m && m[2] != null) {
+                      // m[2] contains the raw contents between the quotes, including backslashes
+                      notesEl.textContent = m[2];
+                    }
+                  } catch (e) {
+                    // ignore fetch/parse errors and keep the interpreted notes
+                  }
+                })();
               } else if (sec && typeof sec.notes === 'undefined') {
                 // Section file loaded but provides no notes field
                 notesEl.textContent = 'Could not find data in the section...';

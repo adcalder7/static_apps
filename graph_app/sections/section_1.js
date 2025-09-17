@@ -1,6 +1,6 @@
 window.SECTIONS = window.SECTIONS || {};
 window.SECTIONS['1'] = {
-	notes: `These are fucking notes`,
+	notes: `Testing \\"`,
 	logic: `Some Logic`,
 	completed: true,
 };
