@@ -370,6 +370,8 @@
                 <span id="section_toolbar_sub" class="toolbar-sub" style="font-size:12px;color:#9fb3c8;">&nbsp;</span>
               </div>
               <!-- main toolbar actions can remain here; per-request, select-all moved into each inner pane -->
+              <!-- Refresh button: re-read and re-render the current Section content -->
+              <button id="btn-section-refresh" title="Refresh section" aria-pressed="false">Refresh</button>
             </div>
 
             <!-- Outer scrolling container: when inner panes contain long text, this outer element scrolls vertically -->
@@ -695,6 +697,32 @@
   if (btnLayerFlip) btnLayerFlip.setAttribute('aria-pressed', String(layeredFlipped));
   // ensure visual pressed state reflects default
   if (btnLayerFlip) btnLayerFlip.classList.toggle('pressed', layeredFlipped);
+
+    // Section refresh button: re-read current section and re-render panes
+    const btnSectionRefresh = document.getElementById('btn-section-refresh');
+    if (btnSectionRefresh) btnSectionRefresh.addEventListener('click', async (ev) => {
+      ev.stopPropagation(); ev.preventDefault();
+      // small pressed animation
+      btnSectionRefresh.classList.add('pressed');
+      setTimeout(() => btnSectionRefresh.classList.remove('pressed'), 220);
+      try {
+        // Clear any in-memory caches for the currently selected section so renderNodeLogic will re-fetch
+        if (selectedId) {
+          // determine sid same way renderNodeLogic/loadSectionFor does
+          const fd = (window.feedData && window.feedData[selectedId]) ? window.feedData[selectedId] : null;
+          const numericId = fd && fd.id ? fd.id : selectedId;
+          const sid = String(numericId);
+          try { if (window.__loadedSections) delete window.__loadedSections[sid]; } catch(e) {}
+          try { if (window.SECTIONS) delete window.SECTIONS[sid]; } catch(e) {}
+        }
+        // Re-run the same render logic which will inject the script with cache-busting param
+        if (typeof renderNodeLogic === 'function') renderNodeLogic(selectedId);
+        try { showCopyToast('Section refreshed'); } catch(e) {}
+      } catch (e) {
+        console.error('Section refresh failed', e);
+        try { showCopyToast('Refresh failed'); } catch(e) {}
+      }
+    });
 
     // --- data/state ---
     let nodes = [];
