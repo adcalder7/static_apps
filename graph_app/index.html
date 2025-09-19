@@ -603,7 +603,7 @@
             const capCols = colsRaw.map(s => upperCaseString(s));
             out.push('---');
             out.push(`table: ${capName}`);
-            out.push(`table columns: [ ${capCols.join(', ')} ]`);
+            out.push(`columns: [ ${capCols.join(', ')} ]`);
           }
           return out.length ? out.join('\n') : '';
         }
