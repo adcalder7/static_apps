@@ -242,6 +242,8 @@
     .meta-toggle[aria-expanded="true"] { background: rgba(70,130,200,0.12); border-color: rgba(80,160,230,0.14); }
     .meta-cols { list-style: none; padding-left: 20px; margin: 6px 0 0 0; color: #bfe8ff; font-size: 13px; }
     .meta-cols li { padding: 4px 0; }
+  /* display small column descriptions inline as a faint comment */
+  .col-desc { color: #95b0c8; margin-left:8px; font-size:12px; }
   /* allow selecting meta text */
   .meta-list, .meta-cols, .meta-cols li { user-select: text; }
 
@@ -2411,7 +2413,17 @@
             const li = document.createElement('li');
             const rawCname = c && c.name ? String(c.name) : String(c);
             const cname = upperCaseString(rawCname);
+            // primary displayed name (highlighted if matches query)
             li.innerHTML = highlight(cname, query);
+            // append inline description if present (displayed as a faint comment)
+            const desc = c && (c.description || c.desc || c.label) ? String(c.description || c.desc || c.label) : '';
+            if (desc) {
+              const span = document.createElement('span');
+              span.className = 'col-desc';
+              // show as:  /* description */
+              span.textContent = ' /* ' + desc + ' */';
+              li.appendChild(span);
+            }
             cols.appendChild(li);
           });
         }
