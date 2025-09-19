@@ -83,6 +83,13 @@
       cursor: pointer;
       font-size: 14px;
     }
+    /* Hover affordance for tabs: subtle brighten and lift */
+    .tab-btn:hover {
+      background: linear-gradient(180deg, #11202b, #0f1b26);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+      color: #ffffff;
+    }
     .tab-btn[aria-selected="true"] {
       background: #122033;
       border-bottom-color: #122033;
@@ -336,8 +343,9 @@
       <div class="tabs" role="tablist" aria-label="Graph views">
         <button id="tab-circular" class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-circular">Circular</button>
         <button id="tab-layered" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-layered">Layered</button>
-  <button id="tab-node-logic" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-node-logic">Section</button>
+    <button id="tab-node-logic" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-node-logic">Section</button>
   <button id="tab-node-meta" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-node-meta">Tables</button>
+  <button id="tab-dictionary" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-dictionary">Dictionary</button>
       </div>
 
       <!-- Tab panels -->
@@ -447,6 +455,21 @@
           </div>
         </section>
 
+        <!-- Dictionary panel (mirrors Tables functionality but reads glossary.js -> window.DICTIONARY.words) -->
+        <section id="panel-dictionary" class="tab-panel" role="tabpanel" aria-labelledby="tab-dictionary" data-active="false">
+          <div class="graph-wrap" style="position:relative; padding:0; display:flex; flex-direction:column; height:100%; box-sizing:border-box; min-height:0;">
+            <div style="padding:0 12px 0 12px; color: #cfe0f5; box-sizing:border-box; display:flex; flex-direction:column; flex:1 1 auto; min-height:0; align-items:flex-start;">
+              <div id="dictionary-toolbar" class="small-toolbar" style="display:flex; align-items:center; gap:8px; margin-bottom:6px; width:100%;">
+                <input id="dictionary-search" type="search" placeholder="Search dictionary..." aria-label="Search dictionary" class="search-input" style="max-width:280px; margin-left:8px;" />
+                <button id="btn-clear-dictionary" class="toolbar-btn" style="margin-left:8px;">clear selections</button>
+                <button id="btn-copy-dictionary" class="toolbar-btn" style="margin-left:6px;">copy to clipboard</button>
+                <div id="dictionary-selected-count" style="margin-left:auto; color:#9fb3c8; font-size:13px;">0 selected</div>
+              </div>
+              <div id="dictionary-list" class="meta-list" style="flex:1 1 auto; overflow:auto; width:100%; height:100%; max-height:none; margin-top:0; -ms-overflow-style: none; scrollbar-width: none;"></div>
+            </div>
+          </div>
+        </section>
+
         <!-- Node Notes panel removed -->
 
   <!-- Circular panel: added reset + filter controls -->
@@ -475,6 +498,8 @@
   <script src="feed.js"></script>
   <!-- Load tables.js so window.tables exists for the inline script that renders Tables -->
   <script src="tables.js"></script>
+  <!-- Load dictionary.js so window.DICTIONARY.words exists for the Dictionary tab -->
+  <script src="dictionary.js"></script>
 
   <script>
     // Context menu element for tables (inserted once)
@@ -489,25 +514,32 @@
   const tabCircularBtn  = document.getElementById('tab-circular');
   const tabNodeLogicBtn = document.getElementById('tab-node-logic');
   const tabNodeMetaBtn  = document.getElementById('tab-node-meta');
+  const tabDictionaryBtn = document.getElementById('tab-dictionary');
   const panelLayered    = document.getElementById('panel-layered');
   const panelCircular   = document.getElementById('panel-circular');
   const panelNodeLogic  = document.getElementById('panel-node-logic');
   const panelNodeMeta   = document.getElementById('panel-node-meta');
+  const panelDictionary = document.getElementById('panel-dictionary');
   // Notes tab removed
 
     const canvasTop       = document.getElementById('canvas_top');        // circular
     const canvasLayers    = document.getElementById('canvas_layers');     // layered
   // --- Tables selection state & context menu wiring ---
   const selectedTables = new Set();
+  const selectedDictionary = new Set();
   let currentTablesContextTarget = null; // { tname, el }
   const tablesCtxMenu = document.getElementById('tables-context-menu');
   const tablesCtxToggle = tablesCtxMenu ? tablesCtxMenu.querySelector('#ctx-select-toggle') : null;
   const btnClearTables = document.getElementById('btn-clear-tables');
   const lblSelectedCount = document.getElementById('tables-selected-count');
   const btnCopyTables = document.getElementById('btn-copy-tables');
+  const btnClearDictionary = document.getElementById('btn-clear-dictionary');
+  const lblDictionaryCount = document.getElementById('dictionary-selected-count');
+  const btnCopyDictionary = document.getElementById('btn-copy-dictionary');
 
   function updateSelectedCount() {
     if (lblSelectedCount) lblSelectedCount.textContent = `${selectedTables.size} selected`;
+    if (lblDictionaryCount) lblDictionaryCount.textContent = `${selectedDictionary.size} selected`;
   }
 
   // Capitalize helper: Title Case each word (first letter uppercase, rest lowercase)
@@ -545,58 +577,70 @@
     tablesCtxToggle.addEventListener('click', (e) => {
       if (!currentTablesContextTarget) return;
       const { rawTname, el } = currentTablesContextTarget;
-      if (selectedTables.has(rawTname)) {
-        selectedTables.delete(rawTname);
-        if (el) el.classList.remove('table-selected');
-      } else {
-        selectedTables.add(rawTname);
-        if (el) el.classList.add('table-selected');
-      }
-      updateSelectedCount();
-
-      // helper: format selected tables into the requested block format (capitalized)
-      function formatSelectedForClipboard() {
-        const tables = Array.isArray(window.tables) ? window.tables : [];
-        const out = [];
-        for (const rawName of selectedTables) {
-          // find table object by raw name
-          const tbl = tables.find(x => x && String(x.name) === String(rawName));
-          const colsRaw = Array.isArray(tbl && tbl.columns) ? tbl.columns.map(c => (c && c.name) ? String(c.name) : String(c)) : [];
-          const capName = upperCaseString(rawName);
-          const capCols = colsRaw.map(s => upperCaseString(s));
-          out.push('---');
-          out.push(`table: ${capName}`);
-          out.push(`table columns: [ ${capCols.join(', ')} ]`);
+      // decide whether target is a table or a dictionary entry
+      const isTable = Array.isArray(window.tables) && window.tables.find(x => x && String(x.name) === String(rawTname));
+      const isDict = Array.isArray(window.DICTIONARY && window.DICTIONARY.words) && (window.DICTIONARY.words.find(w => String(w.word) === String(rawTname)));
+      if (isTable) {
+        if (selectedTables.has(rawTname)) {
+          selectedTables.delete(rawTname);
+          if (el) el.classList.remove('table-selected');
+        } else {
+          selectedTables.add(rawTname);
+          if (el) el.classList.add('table-selected');
         }
-        return out.length ? out.join('\n') : '';
-      }
+        updateSelectedCount();
 
-      // copy handler
-      if (btnCopyTables) {
-        btnCopyTables.addEventListener('click', async () => {
-          const payload = formatSelectedForClipboard();
-          if (!payload) return; // nothing selected
-          try {
-            if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-              await navigator.clipboard.writeText(payload);
-            } else {
-              // fallback: textarea
-              const ta = document.createElement('textarea');
-              ta.value = payload;
-              ta.style.position = 'fixed'; ta.style.left = '-9999px';
-              document.body.appendChild(ta);
-              ta.select();
-              document.execCommand('copy');
-              document.body.removeChild(ta);
-            }
-            // visual feedback: briefly mark pressed
-            btnCopyTables.classList.add('pressed');
-            setTimeout(() => btnCopyTables.classList.remove('pressed'), 220);
-            try { if (typeof showCopyToast === 'function') showCopyToast(); } catch(e) {}
-          } catch (e) {
-            console.error('Copy failed', e);
+        // helper: format selected tables into the requested block format (capitalized)
+        function formatSelectedForClipboard() {
+          const tables = Array.isArray(window.tables) ? window.tables : [];
+          const out = [];
+          for (const rawName of selectedTables) {
+            const tbl = tables.find(x => x && String(x.name) === String(rawName));
+            const colsRaw = Array.isArray(tbl && tbl.columns) ? tbl.columns.map(c => (c && c.name) ? String(c.name) : String(c)) : [];
+            const capName = upperCaseString(rawName);
+            const capCols = colsRaw.map(s => upperCaseString(s));
+            out.push('---');
+            out.push(`table: ${capName}`);
+            out.push(`table columns: [ ${capCols.join(', ')} ]`);
           }
-        });
+          return out.length ? out.join('\n') : '';
+        }
+
+        // copy handler for tables
+        if (btnCopyTables) {
+          btnCopyTables.addEventListener('click', async () => {
+            const payload = formatSelectedForClipboard();
+            if (!payload) return; // nothing selected
+            try {
+              await copyTextToClipboard(payload);
+              btnCopyTables.classList.add('pressed');
+              setTimeout(() => btnCopyTables.classList.remove('pressed'), 220);
+              try { if (typeof showCopyToast === 'function') showCopyToast(); } catch(e) {}
+            } catch (e) { console.error('Copy failed', e); }
+          });
+        }
+      } else if (isDict) {
+        if (selectedDictionary.has(rawTname)) {
+          selectedDictionary.delete(rawTname);
+          if (el) el.classList.remove('table-selected');
+        } else {
+          selectedDictionary.add(rawTname);
+          if (el) el.classList.add('table-selected');
+        }
+        updateSelectedCount();
+
+        // copy handler for dictionary
+        if (btnCopyDictionary) {
+          btnCopyDictionary.addEventListener('click', async () => {
+            const arr = Array.from(selectedDictionary.values());
+            if (arr.length === 0) return;
+            const payload = arr.map(k => {
+              const entry = (window.DICTIONARY && window.DICTIONARY.words || []).find(w => String(w.word) === String(k));
+              return entry ? `${entry.word} -- ${entry.definition}` : String(k);
+            }).join('\n\n');
+            try { await copyTextToClipboard(payload); btnCopyDictionary.classList.add('pressed'); setTimeout(()=>btnCopyDictionary.classList.remove('pressed'), 220); try{ if (typeof showCopyToast === 'function') showCopyToast(); }catch(e){} } catch(e) { console.error('Copy failed', e); }
+          });
+        }
       }
       hideCtxMenu();
     });
@@ -1693,6 +1737,9 @@
       const scrollerW = rect.width;
       const scrollerH = rect.height;
 
+      // padding inside node boxes for label text (left/right)
+      const labelPadding = 12;
+
       occBoxes = [];
       ctx.clearRect(0, 0, canvasLayers.width, canvasLayers.height);
 
@@ -1735,10 +1782,12 @@
           const arr = byDepth.get(d) || [];
           let maxLabelW = 0;
           for (const o of arr) {
-            const tw = ctx.measureText(o.id).width;
+            // measure the visual label (includes status icon)
+            const disp = getDisplayNodeLabel(o.id);
+            const tw = ctx.measureText(disp).width;
             if (tw > maxLabelW) maxLabelW = tw;
           }
-          const nodeW = Math.max(minNodeW, Math.ceil(maxLabelW + 24));
+          const nodeW = Math.max(minNodeW, Math.ceil(maxLabelW + labelPadding * 2));
           colWidths[d] = nodeW;
           const colH = arr.length * (28 + rowPadding) - (arr.length > 0 ? rowPadding : 0);
           colHeights[d] = Math.max(colH, 0);
@@ -1819,15 +1868,13 @@
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           try {
-            const labelText = formatNodeLabel(o.id);
-            const status = getNodeStatus(o.id);
-            const icon = STATUS_ICON[status] || STATUS_ICON.pending;
-            const fullLabel = icon + labelText;
-            // label color: use black for completed nodes for better contrast
+            // draw the display label (icon + human label) but ensure it fits within the node box
+            const displayLabel = getDisplayNodeLabel(o.id);
+            const maxW = Math.max(4, bw - labelPadding * 2);
+            const drawLabel = truncateText(ctx, displayLabel, maxW);
             const labelColorH = completed_h ? '#000000' : '#03181a';
             ctx.fillStyle = labelColorH;
-            ctx.fillText(fullLabel, pos.x, pos.y);
-            // no strikethrough for completed nodes; visual indicator is the gray box and black label
+            ctx.fillText(drawLabel, pos.x, pos.y);
           } catch (e) {
             const fallbackIcon = STATUS_ICON.pending;
             ctx.fillText(fallbackIcon + formatNodeLabel(o.id), pos.x, pos.y);
@@ -1893,10 +1940,11 @@
         maxRowCount = Math.max(maxRowCount, arr.length);
         let maxLabelW = 0;
         for (const o of arr) {
-          const tw = ctx.measureText(o.id).width;
+          const disp = getDisplayNodeLabel(o.id);
+          const tw = ctx.measureText(disp).width;
           if (tw > maxLabelW) maxLabelW = tw;
         }
-        const nodeW = Math.max(minNodeW, Math.ceil(maxLabelW + 24));
+        const nodeW = Math.max(minNodeW, Math.ceil(maxLabelW + labelPadding * 2));
         nodeWidths[d] = nodeW;
         const rowWidth = arr.length > 0 ? (arr.length * nodeW + (arr.length - 1) * colPadding) : 0;
         rowWidths[d] = rowWidth;
@@ -1978,11 +2026,10 @@
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           try {
-            const status = getNodeStatus(o.id);
-            const icon = STATUS_ICON[status] || STATUS_ICON.pending;
-            const labelText = icon + formatNodeLabel(o.id);
-            ctx.fillText(labelText, pos.x, pos.y);
-            // no strikethrough for completed nodes
+            const displayLabel = getDisplayNodeLabel(o.id);
+            const maxW = Math.max(4, bw - labelPadding * 2);
+            const drawLabel = truncateText(ctx, displayLabel, maxW);
+            ctx.fillText(drawLabel, pos.x, pos.y);
           } catch (e) {
             const fallbackIcon = STATUS_ICON.pending;
             ctx.fillText(fallbackIcon + '' + formatNodeLabel(o.id), pos.x, pos.y);
@@ -2389,6 +2436,75 @@
       });
     }
 
+    // Render the Dictionary contents into the Dictionary tab as collapsible items
+    function renderDictionary() {
+      const container = document.getElementById('dictionary-list');
+      if (!container) return;
+      container.innerHTML = '';
+      const words = Array.isArray(window.DICTIONARY && window.DICTIONARY.words) ? window.DICTIONARY.words : [];
+      const searchInput = document.getElementById('dictionary-search');
+      const query = searchInput && searchInput.value ? String(searchInput.value).trim().toLowerCase() : '';
+      if (words.length === 0) {
+        container.textContent = 'No dictionary entries available.';
+        return;
+      }
+
+      function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+      function highlight(text, q) {
+        if (!q) return esc(text);
+        try {
+          const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + ')', 'ig');
+          return esc(text).replace(re, '<span class="highlight">$1</span>');
+        } catch (e) { return esc(text); }
+      }
+
+      const visible = words.filter(w => {
+        if (!query) return true;
+        const wn = w && w.word ? String(w.word).toLowerCase() : '';
+        const def = w && w.definition ? String(w.definition).toLowerCase() : '';
+        return wn.indexOf(query) !== -1 || def.indexOf(query) !== -1;
+      });
+
+      visible.forEach(w => {
+        const item = document.createElement('div');
+        item.className = 'meta-item';
+        const header = document.createElement('button');
+        header.type = 'button';
+        header.className = 'meta-toggle';
+        header.setAttribute('aria-expanded', 'false');
+        const rawName = w && w.word ? String(w.word) : '(unnamed)';
+        const disp = capitalizeWords(rawName);
+        item.dataset.wordRaw = rawName;
+        if (selectedDictionary.has(rawName)) item.classList.add('table-selected');
+        header.innerHTML = highlight(disp, query);
+
+        const body = document.createElement('div');
+        body.className = 'meta-cols';
+        body.style.display = 'none';
+        const defEl = document.createElement('div');
+        defEl.style.padding = '6px 0';
+        defEl.innerHTML = highlight(String(w.definition || ''), query);
+        body.appendChild(defEl);
+
+        header.addEventListener('click', () => {
+          const expanded = header.getAttribute('aria-expanded') === 'true';
+          header.setAttribute('aria-expanded', String(!expanded));
+          body.style.display = expanded ? 'none' : 'block';
+        });
+
+        item.addEventListener('contextmenu', (ev) => {
+          try { ev.preventDefault(); } catch (e) {}
+          currentTablesContextTarget = { rawTname: rawName, el: item };
+          if (tablesCtxToggle) tablesCtxToggle.textContent = selectedDictionary.has(rawName) ? 'Unselect' : 'Select';
+          showCtxMenu(ev.pageX, ev.pageY);
+        });
+
+        item.appendChild(header);
+        item.appendChild(body);
+        container.appendChild(item);
+      });
+    }
+
     // toggle filter
     function toggleShowOnlySelected() {
       showOnlySelected = !showOnlySelected;
@@ -2428,10 +2544,11 @@
       if (tabNodeLogicBtn) tabNodeLogicBtn.setAttribute('aria-selected', String(which === 'node-logic'));
       if (tabNodeMetaBtn) tabNodeMetaBtn.setAttribute('aria-selected', String(which === 'node-meta'));
 
-      panelLayered.dataset.active  = String(which === 'layered');
-      panelCircular.dataset.active = String(which === 'circular');
-      if (panelNodeLogic) panelNodeLogic.dataset.active = String(which === 'node-logic');
-      if (panelNodeMeta) panelNodeMeta.dataset.active = String(which === 'node-meta');
+  panelLayered.dataset.active  = String(which === 'layered');
+  panelCircular.dataset.active = String(which === 'circular');
+  if (panelNodeLogic) panelNodeLogic.dataset.active = String(which === 'node-logic');
+  if (panelNodeMeta) panelNodeMeta.dataset.active = String(which === 'node-meta');
+  if (panelDictionary) panelDictionary.dataset.active = String(which === 'dictionary');
 
       // After switching, (re)size & redraw only the visible panel
       resizeActive();
@@ -2439,6 +2556,11 @@
       // If switching to the Tables tab, render the contents from Tables.js
       if (which === 'node-meta') {
         try { if (typeof renderTables === 'function') renderTables(); } catch (e) { /* noop */ }
+      }
+
+      // If switching to the Dictionary tab, render the contents from dictionary.js
+      if (which === 'dictionary') {
+        try { if (typeof renderDictionary === 'function') renderDictionary(); } catch (e) { /* noop */ }
       }
 
       // If switching to the circular tab and a node is already selected, reset the circular layout
@@ -2453,6 +2575,7 @@
   tabCircularBtn.addEventListener('click', () => activateTab('circular'));
   if (tabNodeLogicBtn) tabNodeLogicBtn.addEventListener('click', () => activateTab('node-logic'));
   if (tabNodeMetaBtn) tabNodeMetaBtn.addEventListener('click', () => activateTab('node-meta'));
+  if (tabDictionaryBtn) tabDictionaryBtn.addEventListener('click', () => activateTab('dictionary'));
 
   // Wire Tables search input
   (function wireTablesSearch() {
@@ -2467,11 +2590,24 @@
     input.addEventListener('search', () => { try { renderTables(); } catch (e) {} });
   })();
 
+  // Wire Dictionary search input (mirrors tables behavior)
+  (function wireDictionarySearch() {
+    const input = document.getElementById('dictionary-search');
+    if (!input) return;
+    let t = null;
+    input.addEventListener('input', () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => { try { renderDictionary(); } catch (e) {} }, 160);
+    });
+    input.addEventListener('search', () => { try { renderDictionary(); } catch (e) {} });
+  })();
+
     // Keyboard: Left/Right to switch tabs
     // collect available tab buttons in DOM order for keyboard navigation
-    const tabButtons = [tabLayeredBtn, tabCircularBtn];
-    if (tabNodeLogicBtn) tabButtons.push(tabNodeLogicBtn);
-    if (tabNodeMetaBtn) tabButtons.push(tabNodeMetaBtn);
+  const tabButtons = [tabLayeredBtn, tabCircularBtn];
+  if (tabNodeLogicBtn) tabButtons.push(tabNodeLogicBtn);
+  if (tabNodeMetaBtn) tabButtons.push(tabNodeMetaBtn);
+  if (tabDictionaryBtn) tabButtons.push(tabDictionaryBtn);
 
     tabButtons.forEach((btn, idx, arr) => {
       btn.addEventListener('keydown', (e) => {
@@ -2527,6 +2663,7 @@
       activateTab('layered');
       // render tables view
       try { if (typeof renderTables === 'function') renderTables(); } catch (e) { /* noop */ }
+      try { if (typeof renderDictionary === 'function') renderDictionary(); } catch (e) { /* noop */ }
     }
 
     // Utility: select all text inside a container element
@@ -2588,6 +2725,23 @@
         const icon = STATUS_ICON[status] || STATUS_ICON.pending;
         return icon + base;
       } catch (e) { return formatNodeLabel(nodeKey); }
+    }
+
+    // Helper: truncate text to fit in a maximum pixel width using ellipsis. ctx.font must be set prior to calling.
+    function truncateText(ctx, text, maxWidth) {
+      if (!text) return '';
+      if (ctx.measureText(text).width <= maxWidth) return text;
+      const ell = '…';
+      let lo = 0, hi = text.length;
+      // binary search for fitting length
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        const s = text.slice(0, mid) + ell;
+        if (ctx.measureText(s).width <= maxWidth) lo = mid; else hi = mid - 1;
+      }
+      const res = text.slice(0, lo) + ell;
+      // final clamp in case of off-by-one
+      return ctx.measureText(res).width <= maxWidth ? res : res.slice(0, Math.max(0, res.length - 1)) + ell;
     }
 
     // Wire toolbar Select All buttons (per-pane). Select only the code-block contents so

@@ -1,7 +1,7 @@
 window.feedData = {
 	QuickSort: {
 		id: '1',
-		label: 'QuickSort',
+		label: 'QuickSortzxcmnvbk.lzdsngv.sdfngk.jdn',
 		children: [
 			{ id: '2', label: 'GreedyMatch' },
 			{ id: '3', label: 'MergeScan' },
