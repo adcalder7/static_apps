@@ -317,7 +317,6 @@
 <body>
   <header>
     <strong>Adjacency Graph</strong>
-    <span class="badge">vanilla node + canvas</span>
   </header>
 
   <div id="wrap">
@@ -328,11 +327,6 @@
         <input id="node-search" type="search" placeholder="Search nodes..." aria-label="Search nodes" class="search-input" />
       </div>
       <ul id="node-list" aria-label="Nodes list"></ul>
-
-      
-
-      <h2>Parsed Summary</h2>
-      <div id="summary"></div>
     </aside>
 
     <!-- draggable splitter -->
@@ -2840,20 +2834,6 @@
       });
     });
 
-    // Summary
-    function populateSummary(nodesArr, edgesArr) {
-      const el = document.getElementById('summary');
-      const deg = new Map(nodesArr.map(n => [n.id, 0]));
-      edgesArr.forEach(e => deg.set(e.target, (deg.get(e.target) || 0) + 1));
-      const top = [...deg.entries()].sort((a,b) => b[1]-a[1]).slice(0, 10);
-      el.innerHTML = `
-        <div><strong>Nodes:</strong> ${nodesArr.length}</div>
-        <div><strong>Edges:</strong> ${edgesArr.length}</div>
-        <div style="margin-top:6px;"><strong>Top in-degree:</strong></div>
-        <ol>${top.map(([id, d]) => `<li>${id}: ${d}</li>`).join('')}</ol>
-      `;
-    }
-
     // Init from feed.js
     function initFromFeedJS() {
       const data = (typeof window !== 'undefined') ? window.feedData : null;
@@ -2873,8 +2853,7 @@
       layoutCircle(nodes, positions);
       // capture canonical positions for reset
       saveCanonicalPositions();
-
-  populateSummary(nodes, edges);
+      
       populateNodeList(nodes);
 
       // ensure circular layout canonical positions are set at load
