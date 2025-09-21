@@ -665,6 +665,16 @@
     });
   }
 
+  // wire clear selections for Dictionary
+  if (btnClearDictionary) {
+    btnClearDictionary.addEventListener('click', () => {
+      selectedDictionary.clear();
+      // remove class from any dictionary items
+      document.querySelectorAll('#dictionary-list .table-selected').forEach(el => el.classList.remove('table-selected'));
+      updateSelectedCount();
+    });
+  }
+
   updateSelectedCount();
     const layersScroller  = document.getElementById('layers_scroller');
     const circularScroller= document.getElementById('circular_scroller');
@@ -2372,69 +2382,119 @@
         } catch (e) { return esc(text); }
       }
 
-      // Filter tables by query (name or any column)
-      const visible = tables.filter(tbl => {
-        if (!query) return true;
-        const name = tbl && tbl.name ? String(tbl.name).toLowerCase() : '';
-        if (name.indexOf(query) !== -1) return true;
-        if (Array.isArray(tbl.columns)) {
-          for (const c of tbl.columns) {
-            const cn = c && c.name ? String(c.name).toLowerCase() : String(c).toLowerCase();
-            if (cn.indexOf(query) !== -1) return true;
-          }
-        }
-        return false;
-      });
-
-      visible.forEach(tbl => {
+      // For each table, create a collapsible item. Header shows the capitalized name only.
+      tables.forEach(tbl => {
         const item = document.createElement('div');
         item.className = 'meta-item';
+
+        const rawTname = tbl && tbl.name ? String(tbl.name) : '(unnamed)';
+        item.dataset.tnameRaw = rawTname;
+        if (selectedTables.has(rawTname)) item.classList.add('table-selected');
 
         const header = document.createElement('button');
         header.type = 'button';
         header.className = 'meta-toggle';
-        // collapsed by default
         header.setAttribute('aria-expanded', 'false');
-  const rawTname = tbl && tbl.name ? String(tbl.name) : '(unnamed)';
-  const tname = upperCaseString(rawTname);
-        // attach stable identifier for selection
-  // store raw name for identification but display capitalized name
-  item.dataset.tnameRaw = rawTname;
-  if (selectedTables.has(rawTname)) item.classList.add('table-selected');
+        header.innerHTML = highlight(upperCaseString(rawTname), query);
 
-        // Highlight matches in the table name when query is present
-        header.innerHTML = highlight(tname, query);
+        const panel = document.createElement('div');
+        panel.className = 'meta-cols';
+        panel.style.display = 'none';
 
-        const cols = document.createElement('ul');
-        cols.className = 'meta-cols';
-        cols.style.display = 'none';
-        if (Array.isArray(tbl.columns)) {
-          tbl.columns.forEach(c => {
-            const li = document.createElement('li');
-            const rawCname = c && c.name ? String(c.name) : String(c);
-            const cname = upperCaseString(rawCname);
-            // primary displayed name (highlighted if matches query)
-            li.innerHTML = highlight(cname, query);
-            // append inline description if present (displayed as a faint comment)
-            const desc = c && (c.description || c.desc || c.label) ? String(c.description || c.desc || c.label) : '';
-            if (desc) {
-              const span = document.createElement('span');
-              span.className = 'col-desc';
-              // show as:  /* description */
-              span.textContent = ' /* ' + desc + ' */';
-              li.appendChild(span);
-            }
-            cols.appendChild(li);
+        // If new schema (columns are attribute objects), render the requested layout
+        const first = Array.isArray(tbl.columns) && tbl.columns.length ? tbl.columns[0] : null;
+        const isAttrObjects = first && typeof first === 'object' && !Array.isArray(first) && (('id' in first) || ('size' in first) || ('format' in first) || ('mandatory' in first) || ('FK' in first) || ('Notes' in first) || ('C900' in first) || ('name' in first));
+
+        if (isAttrObjects) {
+          // Header lines: Name, Schema Name, Description
+          const nameLine = document.createElement('div');
+          nameLine.innerHTML = `<strong>Name:</strong> ${esc(tbl.name || '')}`;
+          const schemaLine = document.createElement('div');
+          schemaLine.innerHTML = `<strong>Schema Name:</strong> ${esc(tbl.schemaname || tbl.schema || '')}`;
+          const descLine = document.createElement('div');
+          descLine.innerHTML = `<strong>Description:</strong> ${esc(tbl.description || tbl.desc || '')}`;
+          panel.appendChild(nameLine);
+          panel.appendChild(schemaLine);
+          panel.appendChild(descLine);
+
+          const hr1 = document.createElement('hr');
+          hr1.style.border = 'none';
+          hr1.style.borderTop = '1px solid rgba(120,150,180,0.06)';
+          panel.appendChild(hr1);
+
+          // Build attribute table. Columns (keys) shown in this fixed order.
+          const keyOrder = ['id','name','size','format','mandatory','FK','Notes','C900'];
+          const tableEl = document.createElement('table');
+          tableEl.style.width = '100%';
+          tableEl.style.borderCollapse = 'collapse';
+
+          const thead = document.createElement('thead');
+          const headRow = document.createElement('tr');
+          keyOrder.forEach(k => {
+            const th = document.createElement('th');
+            th.textContent = k;
+            th.style.textAlign = 'left';
+            th.style.padding = '6px 8px';
+            th.style.borderBottom = '1px solid rgba(120,150,180,0.06)';
+            th.style.color = '#cfe0f5';
+            headRow.appendChild(th);
           });
+          thead.appendChild(headRow);
+          tableEl.appendChild(thead);
+
+          const tbody = document.createElement('tbody');
+          tbl.columns.forEach(colObj => {
+            const tr = document.createElement('tr');
+            keyOrder.forEach(k => {
+              const td = document.createElement('td');
+              td.style.padding = '6px 8px';
+              td.style.borderBottom = '1px dashed rgba(120,150,180,0.03)';
+              td.style.verticalAlign = 'top';
+              const v = (colObj && (k in colObj)) ? String(colObj[k]) : '';
+              td.innerHTML = highlight(v, query);
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          });
+          tableEl.appendChild(tbody);
+          panel.appendChild(tableEl);
+
+          const hr2 = document.createElement('hr');
+          hr2.style.border = 'none';
+          hr2.style.borderTop = '1px solid rgba(120,150,180,0.06)';
+          panel.appendChild(hr2);
+        } else {
+          // Legacy rendering: simple list of column names (with optional descriptions)
+          const ul = document.createElement('ul');
+          ul.className = 'meta-cols';
+          ul.style.margin = '0';
+          if (Array.isArray(tbl.columns)) {
+            tbl.columns.forEach(c => {
+              const li = document.createElement('li');
+              const rawCname = c && c.name ? String(c.name) : String(c);
+              const cname = upperCaseString(rawCname);
+              li.innerHTML = highlight(cname, query);
+              const desc = c && (c.description || c.desc || c.label) ? String(c.description || c.desc || c.label) : '';
+              if (desc) {
+                const span = document.createElement('span');
+                span.className = 'col-desc';
+                span.textContent = ' /* ' + desc + ' */';
+                li.appendChild(span);
+              }
+              ul.appendChild(li);
+            });
+          }
+          panel.appendChild(ul);
         }
 
+        // Toggle behavior
         header.addEventListener('click', () => {
           const expanded = header.getAttribute('aria-expanded') === 'true';
           header.setAttribute('aria-expanded', String(!expanded));
-          cols.style.display = expanded ? 'none' : 'block';
+          panel.style.display = expanded ? 'none' : 'block';
         });
 
-        // Right-click to open context menu for select/unselect
+        // Context menu for selection (preserve existing behavior)
         item.addEventListener('contextmenu', (ev) => {
           try { ev.preventDefault(); } catch (e) {}
           currentTablesContextTarget = { rawTname: rawTname, el: item };
@@ -2443,7 +2503,7 @@
         });
 
         item.appendChild(header);
-        item.appendChild(cols);
+        item.appendChild(panel);
         container.appendChild(item);
       });
     }

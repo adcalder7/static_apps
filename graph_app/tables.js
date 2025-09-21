@@ -3,6 +3,7 @@
 window.tables = [
 	{
 		name: 'users',
+		schemaname: 'schmea.users',
 		columns: [
 			{ name: 'id', description: 'Primary identifier' },
 			{ name: 'username', description: 'Username / handle' },
