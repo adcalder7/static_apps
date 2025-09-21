@@ -1,6 +1,6 @@
 // Clean mock dataset for UI/testing: window.tables is an array of table metadata objects.
 // Schema: { name, schemaname, description, columns: [ { id, name, size, format, mandatory, FK, Notes, C900 } ] }
-window.tables = [
+window.erdTables = [
 	{
 		name: 'users',
 		schemaname: 'public.users',

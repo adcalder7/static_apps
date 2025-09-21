@@ -346,7 +346,8 @@
         <button id="tab-circular" class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-circular">Circular</button>
         <button id="tab-layered" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-layered">Layered</button>
     <button id="tab-node-logic" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-node-logic">Section</button>
-  <button id="tab-node-meta" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-node-meta">Tables</button>
+    <button id="tab-node-meta" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-node-meta">Tables</button>
+  <button id="tab-erd" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-erd">ERD</button>
   <button id="tab-dictionary" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-dictionary">Dictionary</button>
       </div>
 
@@ -457,6 +458,21 @@
           </div>
         </section>
 
+        <!-- ERD panel (reads erd.js -> window.erdTables) -->
+        <section id="panel-erd" class="tab-panel" role="tabpanel" aria-labelledby="tab-erd" data-active="false">
+          <div class="graph-wrap" style="position:relative; padding:0; display:flex; flex-direction:column; height:100%; box-sizing:border-box; min-height:0;">
+            <div style="padding:0 12px 0 12px; color: #cfe0f5; box-sizing:border-box; display:flex; flex-direction:column; flex:1 1 auto; min-height:0; align-items:flex-start;">
+              <div id="erd-toolbar" class="small-toolbar" style="display:flex; align-items:center; gap:8px; margin-bottom:6px; width:100%;">
+                <input id="erd-search" type="search" placeholder="Search ERD..." aria-label="Search ERD" class="search-input" style="max-width:280px; margin-left:8px;" />
+                <button id="btn-clear-erd" class="toolbar-btn" style="margin-left:8px;">clear selections</button>
+                <button id="btn-copy-erd" class="toolbar-btn" style="margin-left:6px;">copy to clipboard</button>
+                <div id="erd-selected-count" style="margin-left:auto; color:#9fb3c8; font-size:13px;">0 selected</div>
+              </div>
+              <div id="erd-list" class="meta-list" style="flex:1 1 auto; overflow:auto; width:100%; height:100%; max-height:none; margin-top:0; -ms-overflow-style: none; scrollbar-width: none;"></div>
+            </div>
+          </div>
+        </section>
+
         <!-- Dictionary panel (mirrors Tables functionality but reads glossary.js -> window.DICTIONARY.words) -->
         <section id="panel-dictionary" class="tab-panel" role="tabpanel" aria-labelledby="tab-dictionary" data-active="false">
           <div class="graph-wrap" style="position:relative; padding:0; display:flex; flex-direction:column; height:100%; box-sizing:border-box; min-height:0;">
@@ -500,6 +516,8 @@
   <script src="feed.js"></script>
   <!-- Load tables.js so window.tables exists for the inline script that renders Tables -->
   <script src="tables.js"></script>
+  <!-- Load erd.js so window.erdTables exists for the ERD tab -->
+  <script src="erd.js"></script>
   <!-- Load dictionary.js so window.DICTIONARY.words exists for the Dictionary tab -->
   <script src="dictionary.js"></script>
 
@@ -516,11 +534,13 @@
   const tabCircularBtn  = document.getElementById('tab-circular');
   const tabNodeLogicBtn = document.getElementById('tab-node-logic');
   const tabNodeMetaBtn  = document.getElementById('tab-node-meta');
+  const tabErdBtn = document.getElementById('tab-erd');
   const tabDictionaryBtn = document.getElementById('tab-dictionary');
   const panelLayered    = document.getElementById('panel-layered');
   const panelCircular   = document.getElementById('panel-circular');
   const panelNodeLogic  = document.getElementById('panel-node-logic');
   const panelNodeMeta   = document.getElementById('panel-node-meta');
+  const panelErd        = document.getElementById('panel-erd');
   const panelDictionary = document.getElementById('panel-dictionary');
   // Notes tab removed
 
@@ -529,18 +549,23 @@
   // --- Tables selection state & context menu wiring ---
   const selectedTables = new Set();
   const selectedDictionary = new Set();
+  const selectedErd = new Set();
   let currentTablesContextTarget = null; // { tname, el }
   const tablesCtxMenu = document.getElementById('tables-context-menu');
   const tablesCtxToggle = tablesCtxMenu ? tablesCtxMenu.querySelector('#ctx-select-toggle') : null;
   const btnClearTables = document.getElementById('btn-clear-tables');
   const lblSelectedCount = document.getElementById('tables-selected-count');
   const btnCopyTables = document.getElementById('btn-copy-tables');
+  const btnClearErd = document.getElementById('btn-clear-erd');
+  const lblErdCount = document.getElementById('erd-selected-count');
+  const btnCopyErd = document.getElementById('btn-copy-erd');
   const btnClearDictionary = document.getElementById('btn-clear-dictionary');
   const lblDictionaryCount = document.getElementById('dictionary-selected-count');
   const btnCopyDictionary = document.getElementById('btn-copy-dictionary');
 
   function updateSelectedCount() {
     if (lblSelectedCount) lblSelectedCount.textContent = `${selectedTables.size} selected`;
+    if (lblErdCount) lblErdCount.textContent = `${selectedErd.size} selected`;
     if (lblDictionaryCount) lblDictionaryCount.textContent = `${selectedDictionary.size} selected`;
   }
 
@@ -578,11 +603,12 @@
   if (tablesCtxToggle) {
     tablesCtxToggle.addEventListener('click', (e) => {
       if (!currentTablesContextTarget) return;
-      const { rawTname, el } = currentTablesContextTarget;
-      // decide whether target is a table or a dictionary entry
-      const isTable = Array.isArray(window.tables) && window.tables.find(x => x && String(x.name) === String(rawTname));
-      const isDict = Array.isArray(window.DICTIONARY && window.DICTIONARY.words) && (window.DICTIONARY.words.find(w => String(w.word) === String(rawTname)));
-      if (isTable) {
+  const { rawTname, el } = currentTablesContextTarget;
+  // decide whether target is a table, an ERD table, or a dictionary entry
+  const isTable = Array.isArray(window.tables) && window.tables.find(x => x && String(x.name) === String(rawTname));
+  const isErd = Array.isArray(window.erdTables) && window.erdTables.find(x => x && String(x.name) === String(rawTname));
+  const isDict = Array.isArray(window.DICTIONARY && window.DICTIONARY.words) && (window.DICTIONARY.words.find(w => String(w.word) === String(rawTname)));
+  if (isTable) {
         if (selectedTables.has(rawTname)) {
           selectedTables.delete(rawTname);
           if (el) el.classList.remove('table-selected');
@@ -621,7 +647,7 @@
             } catch (e) { console.error('Copy failed', e); }
           });
         }
-      } else if (isDict) {
+  } else if (isDict) {
         if (selectedDictionary.has(rawTname)) {
           selectedDictionary.delete(rawTname);
           if (el) el.classList.remove('table-selected');
@@ -643,6 +669,16 @@
             try { await copyTextToClipboard(payload); btnCopyDictionary.classList.add('pressed'); setTimeout(()=>btnCopyDictionary.classList.remove('pressed'), 220); try{ if (typeof showCopyToast === 'function') showCopyToast(); }catch(e){} } catch(e) { console.error('Copy failed', e); }
           });
         }
+      }
+      else if (isErd) {
+        if (selectedErd.has(rawTname)) {
+          selectedErd.delete(rawTname);
+          if (el) el.classList.remove('table-selected');
+        } else {
+          selectedErd.add(rawTname);
+          if (el) el.classList.add('table-selected');
+        }
+        updateSelectedCount();
       }
       hideCtxMenu();
     });
@@ -672,6 +708,30 @@
       // remove class from any dictionary items
       document.querySelectorAll('#dictionary-list .table-selected').forEach(el => el.classList.remove('table-selected'));
       updateSelectedCount();
+    });
+  }
+
+  // wire clear selections for ERD
+  if (btnClearErd) {
+    btnClearErd.addEventListener('click', () => {
+      selectedErd.clear();
+      document.querySelectorAll('#erd-list .table-selected').forEach(el => el.classList.remove('table-selected'));
+      updateSelectedCount();
+    });
+  }
+
+  // wire copy for ERD
+  if (btnCopyErd) {
+    btnCopyErd.addEventListener('click', async () => {
+      const arr = Array.from(selectedErd.values());
+      if (arr.length === 0) return;
+      // For ERD copy produce a simple list of table names and their columns
+      const payload = arr.map(tn => {
+        const tbl = (window.erdTables || []).find(x => x && String(x.name) === String(tn));
+        const cols = Array.isArray(tbl && tbl.columns) ? tbl.columns.map(c => (c && (c.name||c.id)) ? (c.name||c.id) : String(c)) : [];
+        return `${String(tn)}: ${cols.join(', ')}`;
+      }).join('\n\n');
+      try { await copyTextToClipboard(payload); btnCopyErd.classList.add('pressed'); setTimeout(()=>btnCopyErd.classList.remove('pressed'),220); try{ if (typeof showCopyToast === 'function') showCopyToast(); }catch(e){} } catch(e) { console.error('Copy failed', e); }
     });
   }
 
@@ -2508,6 +2568,78 @@
       });
     }
 
+    // Render ERD contents (reads `window.erdTables`) into the ERD tab.
+    // The UI is identical to Tables except the attribute table inside each item
+    // should contain only one column named "column" (showing the column name/value).
+    function renderERD() {
+      const container = document.getElementById('erd-list');
+      if (!container) return;
+      container.innerHTML = '';
+      const tables = Array.isArray(window.erdTables) ? window.erdTables : [];
+      const searchInput = document.getElementById('erd-search');
+      const query = searchInput && searchInput.value ? String(searchInput.value).trim().toLowerCase() : '';
+      if (tables.length === 0) {
+        container.textContent = 'No ERD data available.';
+        return;
+      }
+
+      function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+      function highlight(text, q) { if (!q) return esc(text); try { const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\\]\]/g,'\\$&') + ')','ig'); return esc(text).replace(re, '<span class="highlight">$1</span>'); } catch (e) { return esc(text); } }
+
+      tables.forEach(tbl => {
+        const item = document.createElement('div');
+        item.className = 'meta-item';
+        const rawTname = tbl && tbl.name ? String(tbl.name) : '(unnamed)';
+        item.dataset.tnameRaw = rawTname;
+        if (selectedErd.has(rawTname)) item.classList.add('table-selected');
+
+        const header = document.createElement('button');
+        header.type = 'button';
+        header.className = 'meta-toggle';
+        header.setAttribute('aria-expanded','false');
+        header.innerHTML = highlight(upperCaseString(rawTname), query);
+
+        const panel = document.createElement('div');
+        panel.className = 'meta-cols';
+        panel.style.display = 'none';
+
+  // No header lines inside expanded ERD items (compact view)
+
+        const hr = document.createElement('hr'); hr.style.border = 'none'; hr.style.borderTop = '1px solid rgba(120,150,180,0.06)'; panel.appendChild(hr);
+
+        // Build single-column table named "column" for ERD view
+        const tableEl = document.createElement('table'); tableEl.style.width = '100%'; tableEl.style.borderCollapse = 'collapse';
+        const thead = document.createElement('thead'); const headRow = document.createElement('tr');
+  const th = document.createElement('th'); th.textContent = 'COLUMNS'; th.style.textAlign = 'left'; th.style.padding = '6px 8px'; th.style.borderBottom = '1px solid rgba(120,150,180,0.06)'; th.style.color = '#cfe0f5'; headRow.appendChild(th);
+        thead.appendChild(headRow); tableEl.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        // For ERD we support both legacy column arrays and attribute-objects; always render the column name/value in the single cell
+        const cols = Array.isArray(tbl.columns) ? tbl.columns : [];
+        cols.forEach(c => {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td'); td.style.padding = '6px 8px'; td.style.borderBottom = '1px dashed rgba(120,150,180,0.03)'; td.style.verticalAlign='top';
+          let val = '';
+          if (c && typeof c === 'object' && ('name' in c || 'id' in c)) {
+            val = c.name || c.id || JSON.stringify(c);
+          } else {
+            val = String(c);
+          }
+          td.innerHTML = highlight(val, query);
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+        });
+        tableEl.appendChild(tbody);
+        panel.appendChild(tableEl);
+
+        header.addEventListener('click', () => { const expanded = header.getAttribute('aria-expanded') === 'true'; header.setAttribute('aria-expanded', String(!expanded)); panel.style.display = expanded ? 'none' : 'block'; });
+
+        // Context menu selection behavior
+        item.addEventListener('contextmenu', (ev) => { try { ev.preventDefault(); } catch(e){} currentTablesContextTarget = { rawTname, el: item }; if (tablesCtxToggle) tablesCtxToggle.textContent = selectedErd.has(rawTname) ? 'Unselect' : 'Select'; showCtxMenu(ev.pageX, ev.pageY); });
+
+        item.appendChild(header); item.appendChild(panel); container.appendChild(item);
+      });
+    }
+
     // Render the Dictionary contents into the Dictionary tab as collapsible items
     function renderDictionary() {
       const container = document.getElementById('dictionary-list');
@@ -2615,11 +2747,13 @@
       tabCircularBtn.setAttribute('aria-selected', String(which === 'circular'));
       if (tabNodeLogicBtn) tabNodeLogicBtn.setAttribute('aria-selected', String(which === 'node-logic'));
       if (tabNodeMetaBtn) tabNodeMetaBtn.setAttribute('aria-selected', String(which === 'node-meta'));
+  if (tabErdBtn) tabErdBtn.setAttribute('aria-selected', String(which === 'erd'));
 
   panelLayered.dataset.active  = String(which === 'layered');
   panelCircular.dataset.active = String(which === 'circular');
   if (panelNodeLogic) panelNodeLogic.dataset.active = String(which === 'node-logic');
   if (panelNodeMeta) panelNodeMeta.dataset.active = String(which === 'node-meta');
+  if (panelErd) panelErd.dataset.active = String(which === 'erd');
   if (panelDictionary) panelDictionary.dataset.active = String(which === 'dictionary');
 
       // After switching, (re)size & redraw only the visible panel
@@ -2628,6 +2762,10 @@
       // If switching to the Tables tab, render the contents from Tables.js
       if (which === 'node-meta') {
         try { if (typeof renderTables === 'function') renderTables(); } catch (e) { /* noop */ }
+      }
+
+      if (which === 'erd') {
+        try { if (typeof renderERD === 'function') renderERD(); } catch (e) { /* noop */ }
       }
 
       // If switching to the Dictionary tab, render the contents from dictionary.js
@@ -2647,6 +2785,7 @@
   tabCircularBtn.addEventListener('click', () => activateTab('circular'));
   if (tabNodeLogicBtn) tabNodeLogicBtn.addEventListener('click', () => activateTab('node-logic'));
   if (tabNodeMetaBtn) tabNodeMetaBtn.addEventListener('click', () => activateTab('node-meta'));
+  if (tabErdBtn) tabErdBtn.addEventListener('click', () => activateTab('erd'));
   if (tabDictionaryBtn) tabDictionaryBtn.addEventListener('click', () => activateTab('dictionary'));
 
   // Wire Tables search input
@@ -2660,6 +2799,18 @@
     });
     // clear on search cancel (x button) to restore full list
     input.addEventListener('search', () => { try { renderTables(); } catch (e) {} });
+  })();
+
+  // Wire ERD search input (mirrors tables behavior)
+  (function wireErdSearch() {
+    const input = document.getElementById('erd-search');
+    if (!input) return;
+    let t = null;
+    input.addEventListener('input', () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => { try { renderERD(); } catch (e) {} }, 160);
+    });
+    input.addEventListener('search', () => { try { renderERD(); } catch (e) {} });
   })();
 
   // Wire Dictionary search input (mirrors tables behavior)
@@ -2679,6 +2830,7 @@
   const tabButtons = [tabLayeredBtn, tabCircularBtn];
   if (tabNodeLogicBtn) tabButtons.push(tabNodeLogicBtn);
   if (tabNodeMetaBtn) tabButtons.push(tabNodeMetaBtn);
+  if (tabErdBtn) tabButtons.push(tabErdBtn);
   if (tabDictionaryBtn) tabButtons.push(tabDictionaryBtn);
 
     tabButtons.forEach((btn, idx, arr) => {
