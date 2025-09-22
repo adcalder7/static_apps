@@ -452,7 +452,7 @@
                     <button id="btn-copy-tables" class="toolbar-btn" style="margin-left:6px;">copy to clipboard</button>
                     <div id="tables-selected-count" style="margin-left:auto; color:#9fb3c8; font-size:13px;">0 selected</div>
                   </div>
-                  <div id="tables-list" class="meta-list" style="display:block; overflow:visible; width:100%; margin-top:0; -ms-overflow-style: none; scrollbar-width: none;"></div>
+                  <div id="tables-list" class="meta-list" style="display:block; overflow:auto; width:100%; margin-top:0; -ms-overflow-style: none; scrollbar-width: none;"></div>
                 </div>
               </div>
 
@@ -465,7 +465,7 @@
                     <button id="btn-copy-erd" class="toolbar-btn" style="margin-left:6px;">copy to clipboard</button>
                     <div id="erd-selected-count" style="margin-left:auto; color:#9fb3c8; font-size:13px;">0 selected</div>
                   </div>
-                  <div id="erd-list" class="meta-list" style="display:block; overflow:visible; width:100%; margin-top:0; -ms-overflow-style: none; scrollbar-width: none;"></div>
+                  <div id="erd-list" class="meta-list" style="display:block; overflow:auto; width:100%; margin-top:0; -ms-overflow-style: none; scrollbar-width: none;"></div>
                 </div>
               </div>
             </div>
@@ -1016,6 +1016,8 @@
           }).catch(() => resolve());
         } catch (e) { resolve(); }
       });
+      // Ensure the list's max-height/overflow are computed immediately after rendering
+      try { const tl = document.getElementById('tables-list'); setTimeout(() => { try { adjustPanelMaxHeight(tl); } catch(e){} }, 40); } catch(e) {}
     }
 
     function updateNodeListIconsForSid(sid){
@@ -2829,6 +2831,8 @@
 
         item.appendChild(header); item.appendChild(panel); container.appendChild(item);
       });
+      // Ensure the ERD list's max-height/overflow are computed immediately after rendering
+      try { const el = document.getElementById('erd-list'); setTimeout(() => { try { adjustPanelMaxHeight(el); } catch(e){} }, 40); } catch(e) {}
     }
 
     // Render the Dictionary contents into the Dictionary tab as collapsible items
