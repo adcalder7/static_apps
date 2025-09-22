@@ -433,46 +433,46 @@
           </div>
         </section>
 
-        <!-- Node Meta panel (now contains inner sub-tabs: Docs Tables & DB Reconn Tables) -->
+        <!-- Node Meta panel (now contains inner sub-tabs: Doc Tables & DB Recon Tables) -->
         <section id="panel-node-meta" class="tab-panel" role="tabpanel" aria-labelledby="tab-node-meta" data-active="false">
           <div class="graph-wrap" style="position:relative; padding:0; display:flex; flex-direction:column; height:100%; box-sizing:border-box; min-height:0;">
             <div style="padding:0 12px 0 12px; color: #cfe0f5; box-sizing:border-box; display:flex; flex-direction:column; flex:1 1 auto; min-height:0; align-items:flex-start;">
               <!-- Inner sub-tabs header -->
               <div class="tabs" role="tablist" aria-label="Tables subviews" style="margin-bottom:8px;">
-                <button id="subtab-docs" class="tab-btn" role="tab" aria-selected="true" aria-controls="subpanel-docs">Docs Tables</button>
-                <button id="subtab-db" class="tab-btn" role="tab" aria-selected="false" aria-controls="subpanel-db">DB Reconn Tables</button>
+                <button id="subtab-docs" class="tab-btn" role="tab" aria-selected="true" aria-controls="subpanel-docs">Doc Tables</button>
+                <button id="subtab-db" class="tab-btn" role="tab" aria-selected="false" aria-controls="subpanel-db">DB Recon Tables</button>
               </div>
 
-              <!-- Subpanel: Docs Tables (contains current Tables toolbar + list) -->
-              <div id="subpanel-docs" class="tab-panel" role="tabpanel" aria-labelledby="subtab-docs" data-active="true" style="width:100%; padding:0;">
-                <div id="node-meta-container" style="width:100%; display:flex; flex-direction:column; flex:1 1 auto; min-height:0; align-items:flex-start;">
+              <!-- Subpanel: Doc Tables (contains current Tables toolbar + list) -->
+              <div id="subpanel-docs" class="tab-panel" role="tabpanel" aria-labelledby="subtab-docs" data-active="true" style="width:100%; padding:0; display:block;">
+                <div id="node-meta-container" style="width:100%; display:block; box-sizing:border-box; align-items:flex-start;">
                   <div id="tables-toolbar" class="small-toolbar" style="display:flex; align-items:center; gap:8px; margin-bottom:6px; width:100%;">
                     <input id="tables-search" type="search" placeholder="Search tables..." aria-label="Search tables" class="search-input" style="max-width:280px; margin-left:8px;" />
                     <button id="btn-clear-tables" class="toolbar-btn" style="margin-left:8px;">clear selections</button>
                     <button id="btn-copy-tables" class="toolbar-btn" style="margin-left:6px;">copy to clipboard</button>
                     <div id="tables-selected-count" style="margin-left:auto; color:#9fb3c8; font-size:13px;">0 selected</div>
                   </div>
-                  <div id="tables-list" class="meta-list" style="flex:1 1 auto; overflow:auto; width:100%; height:100%; max-height:none; margin-top:0; -ms-overflow-style: none; scrollbar-width: none;"></div>
+                  <div id="tables-list" class="meta-list" style="display:block; overflow:visible; width:100%; margin-top:0; -ms-overflow-style: none; scrollbar-width: none;"></div>
                 </div>
               </div>
 
-              <!-- Subpanel: DB Reconn Tables (ERD content) -->
-              <div id="subpanel-db" class="tab-panel" role="tabpanel" aria-labelledby="subtab-db" data-active="false" style="width:100%; padding:0;">
-                <div style="width:100%; display:flex; flex-direction:column; flex:1 1 auto; min-height:0; align-items:flex-start;">
+              <!-- Subpanel: DB Recon Tables (ERD content) -->
+              <div id="subpanel-db" class="tab-panel" role="tabpanel" aria-labelledby="subtab-db" data-active="false" style="width:100%; padding:0; display:block;">
+                <div style="width:100%; display:block; box-sizing:border-box; align-items:flex-start;">
                   <div id="erd-toolbar" class="small-toolbar" style="display:flex; align-items:center; gap:8px; margin-bottom:6px; width:100%;">
                     <input id="erd-search" type="search" placeholder="Search ERD..." aria-label="Search ERD" class="search-input" style="max-width:280px; margin-left:8px;" />
                     <button id="btn-clear-erd" class="toolbar-btn" style="margin-left:8px;">clear selections</button>
                     <button id="btn-copy-erd" class="toolbar-btn" style="margin-left:6px;">copy to clipboard</button>
                     <div id="erd-selected-count" style="margin-left:auto; color:#9fb3c8; font-size:13px;">0 selected</div>
                   </div>
-                  <div id="erd-list" class="meta-list" style="flex:1 1 auto; overflow:auto; width:100%; height:100%; max-height:none; margin-top:0; -ms-overflow-style: none; scrollbar-width: none;"></div>
+                  <div id="erd-list" class="meta-list" style="display:block; overflow:visible; width:100%; margin-top:0; -ms-overflow-style: none; scrollbar-width: none;"></div>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- Standalone ERD panel removed (content migrated into Tables -> DB Reconn Tables) -->
+        <!-- Standalone ERD panel removed (content migrated into Tables -> DB Recon Tables) -->
 
         <!-- Dictionary panel (mirrors Tables functionality but reads glossary.js -> window.DICTIONARY.words) -->
         <section id="panel-dictionary" class="tab-panel" role="tabpanel" aria-labelledby="tab-dictionary" data-active="false">
@@ -578,8 +578,14 @@
     subtabDocsBtn.addEventListener('click', () => {
       subtabDocsBtn.setAttribute('aria-selected', 'true');
       if (subtabDbBtn) subtabDbBtn.setAttribute('aria-selected', 'false');
-      if (subpanelDocs) subpanelDocs.dataset.active = 'true';
-      if (subpanelDb) subpanelDb.dataset.active = 'false';
+      if (subpanelDocs) {
+        subpanelDocs.dataset.active = 'true';
+        try { subpanelDocs.style.display = 'block'; } catch(e) {}
+      }
+      if (subpanelDb) {
+        subpanelDb.dataset.active = 'false';
+        try { subpanelDb.style.display = 'none'; } catch(e) {}
+      }
       try { if (typeof renderTables === 'function') renderTables(); } catch (e) {}
     });
   }
@@ -587,9 +593,81 @@
     subtabDbBtn.addEventListener('click', () => {
       subtabDbBtn.setAttribute('aria-selected', 'true');
       if (subtabDocsBtn) subtabDocsBtn.setAttribute('aria-selected', 'false');
-      if (subpanelDb) subpanelDb.dataset.active = 'true';
-      if (subpanelDocs) subpanelDocs.dataset.active = 'false';
+      if (subpanelDb) {
+        subpanelDb.dataset.active = 'true';
+        try { subpanelDb.style.display = 'block'; } catch(e) {}
+      }
+      if (subpanelDocs) {
+        subpanelDocs.dataset.active = 'false';
+        try { subpanelDocs.style.display = 'none'; } catch(e) {}
+      }
       try { if (typeof renderERD === 'function') renderERD(); } catch (e) {}
+    });
+  }
+
+  // Ensure initial visibility: show Docs, hide DB by default
+  try {
+    if (subpanelDocs) subpanelDocs.style.display = (subpanelDocs.dataset && subpanelDocs.dataset.active === 'true') ? 'block' : 'none';
+    if (subpanelDb) subpanelDb.style.display = (subpanelDb.dataset && subpanelDb.dataset.active === 'true') ? 'block' : 'none';
+  } catch (e) { /* noop */ }
+
+  // Helper: adjust a list's max-height to available viewport space so it scrolls when too tall
+  function adjustPanelMaxHeight(listEl) {
+    try {
+      if (!listEl) return;
+      // compute distance from top of viewport to top of list
+      const rect = listEl.getBoundingClientRect();
+      const top = Math.max(0, rect.top);
+      // leave a small margin at bottom
+      const margin = 20;
+      const avail = Math.max(120, window.innerHeight - top - margin);
+      // If content fits, allow expansion (no maxHeight)
+      if (listEl.scrollHeight <= avail) {
+        listEl.style.maxHeight = 'none';
+        listEl.style.overflow = 'visible';
+        listEl.style.position = 'relative';
+        listEl.style.webkitOverflowScrolling = 'auto';
+        listEl.style.overscrollBehavior = 'auto';
+      } else {
+        listEl.style.maxHeight = avail + 'px';
+        listEl.style.overflow = 'auto';
+        listEl.style.position = 'relative';
+        listEl.style.webkitOverflowScrolling = 'touch';
+        listEl.style.overscrollBehavior = 'contain';
+      }
+    } catch (e) { /* noop */ }
+  }
+
+  function adjustAllPanels() {
+    try {
+      const t = document.getElementById('tables-list');
+      const e = document.getElementById('erd-list');
+      const d = document.getElementById('dictionary-list');
+      adjustPanelMaxHeight(t);
+      adjustPanelMaxHeight(e);
+      adjustPanelMaxHeight(d);
+    } catch (e) { /* noop */ }
+  }
+
+  // Recompute on resize
+  window.addEventListener('resize', () => { try { adjustAllPanels(); } catch(e){} });
+
+  // When clicking toggles inside the lists (expand/collapse), recompute shortly after to allow layout to settle
+  const tablesListEl = document.getElementById('tables-list');
+  const erdListEl = document.getElementById('erd-list');
+  if (tablesListEl) {
+    tablesListEl.addEventListener('click', (ev) => {
+      // meta-toggle buttons inside items
+      if (ev.target && ev.target.classList && ev.target.classList.contains('meta-toggle')) {
+        setTimeout(() => adjustPanelMaxHeight(tablesListEl), 80);
+      }
+    });
+  }
+  if (erdListEl) {
+    erdListEl.addEventListener('click', (ev) => {
+      if (ev.target && ev.target.classList && ev.target.classList.contains('meta-toggle')) {
+        setTimeout(() => adjustPanelMaxHeight(erdListEl), 80);
+      }
     });
   }
 
@@ -693,7 +771,7 @@
     return out.length ? out.join('\n') : '';
   }
 
-  // wire copy handler for tables (Docs Tables subpanel)
+  // wire copy handler for tables (Doc Tables subpanel)
   if (btnCopyTables) {
     btnCopyTables.addEventListener('click', async () => {
       // Gather selected table names from the Docs subpanel DOM only
@@ -774,7 +852,7 @@
   // wire copy for ERD
   if (btnCopyErd) {
     btnCopyErd.addEventListener('click', async () => {
-      // Read selected items from the ERD (DB Reconn) subpanel DOM and format using the same block template
+      // Read selected items from the ERD (DB Recon) subpanel DOM and format using the same block template
       const els = Array.from(document.querySelectorAll('#erd-list .table-selected'));
       if (!els || els.length === 0) return;
       const names = els.map(el => el.dataset && el.dataset.tnameRaw ? String(el.dataset.tnameRaw) : (el.getAttribute && el.getAttribute('data-tname-raw')) || '').filter(Boolean);
@@ -2758,7 +2836,16 @@
       const container = document.getElementById('dictionary-list');
       if (!container) return;
       container.innerHTML = '';
-      const words = Array.isArray(window.DICTIONARY && window.DICTIONARY.words) ? window.DICTIONARY.words : [];
+      // Load words and ensure they're sorted alphabetically (ascending) for the session
+      let words = Array.isArray(window.DICTIONARY && window.DICTIONARY.words) ? (window.DICTIONARY.words || []).slice() : [];
+      if (words.length) {
+        words.sort((a, b) => {
+          const aw = a && a.word ? String(a.word).toLowerCase() : '';
+          const bw = b && b.word ? String(b.word).toLowerCase() : '';
+          return aw.localeCompare(bw);
+        });
+        try { if (!window.DICTIONARY) window.DICTIONARY = {}; window.DICTIONARY.words = words; } catch (e) { /* noop */ }
+      }
       const searchInput = document.getElementById('dictionary-search');
       const query = searchInput && searchInput.value ? String(searchInput.value).trim().toLowerCase() : '';
       if (words.length === 0) {
@@ -2870,7 +2957,7 @@
       // After switching, (re)size & redraw only the visible panel
       resizeActive();
 
-      // If switching to the Tables tab, render the active inner subpanel (Docs Tables or DB Reconn Tables)
+      // If switching to the Tables tab, render the active inner subpanel (Doc Tables or DB Recon Tables)
       if (which === 'node-meta') {
         try {
           const docsActive = subpanelDocs ? subpanelDocs.dataset.active === 'true' : true;
