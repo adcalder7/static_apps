@@ -2643,12 +2643,9 @@
           // Header lines: Name, Schema Name, Description
           const nameLine = document.createElement('div');
           nameLine.innerHTML = `<strong>Name:</strong> ${esc(tbl.name || '')}`;
-          const schemaLine = document.createElement('div');
-          schemaLine.innerHTML = `<strong>Schema Name:</strong> ${esc(tbl.schemaname || tbl.schema || '')}`;
           const descLine = document.createElement('div');
           descLine.innerHTML = `<strong>Description:</strong> ${esc(tbl.description || tbl.desc || '')}`;
           panel.appendChild(nameLine);
-          panel.appendChild(schemaLine);
           panel.appendChild(descLine);
 
           const hr1 = document.createElement('hr');
