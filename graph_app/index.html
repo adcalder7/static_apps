@@ -2578,6 +2578,34 @@
         return;
       }
 
+      // If a search query is present, filter tables so only matches are shown
+      let visibleTables = tables;
+      if (query) {
+        visibleTables = tables.filter(tbl => {
+          try {
+            const name = tbl && tbl.name ? String(tbl.name).toLowerCase() : '';
+            if (name.indexOf(query) !== -1) return true;
+            // check description/schema fields
+            const desc = tbl && (tbl.description || tbl.desc || tbl.schemaname || tbl.schema) ? String(tbl.description || tbl.desc || tbl.schemaname || tbl.schema).toLowerCase() : '';
+            if (desc.indexOf(query) !== -1) return true;
+            // check columns (both legacy string array and attr object arrays)
+            const cols = Array.isArray(tbl.columns) ? tbl.columns : [];
+            for (const c of cols) {
+              if (!c) continue;
+              if (typeof c === 'object') {
+                const cname = c.name ? String(c.name).toLowerCase() : '';
+                if (cname.indexOf(query) !== -1) return true;
+                const cdesc = String(c.description || c.desc || c.label || '').toLowerCase();
+                if (cdesc.indexOf(query) !== -1) return true;
+              } else {
+                if (String(c).toLowerCase().indexOf(query) !== -1) return true;
+              }
+            }
+            return false;
+          } catch (e) { return false; }
+        });
+      }
+
       // helper to escape html
       function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
       function highlight(text, q) {
@@ -2588,8 +2616,8 @@
         } catch (e) { return esc(text); }
       }
 
-      // For each table, create a collapsible item. Header shows the capitalized name only.
-      tables.forEach(tbl => {
+  // For each table, create a collapsible item. Header shows the capitalized name only.
+  visibleTables.forEach(tbl => {
         const item = document.createElement('div');
         item.className = 'meta-item';
 
@@ -2733,7 +2761,7 @@
         item.appendChild(header);
         item.appendChild(panel);
         container.appendChild(item);
-      });
+  });
     }
 
     // Render ERD contents (reads `window.erdTables`) into the ERD tab.
@@ -2751,10 +2779,34 @@
         return;
       }
 
+      // If a search query is present, filter ERD tables so only matches are shown
+      let visibleTables = tables;
+      if (query) {
+        visibleTables = tables.filter(tbl => {
+          try {
+            const name = tbl && tbl.name ? String(tbl.name).toLowerCase() : '';
+            if (name.indexOf(query) !== -1) return true;
+            const cols = Array.isArray(tbl.columns) ? tbl.columns : [];
+            for (const c of cols) {
+              if (!c) continue;
+              if (typeof c === 'object') {
+                const cname = c.name ? String(c.name).toLowerCase() : '';
+                if (cname.indexOf(query) !== -1) return true;
+                const cdesc = String(c.description || c.desc || c.label || '').toLowerCase();
+                if (cdesc.indexOf(query) !== -1) return true;
+              } else {
+                if (String(c).toLowerCase().indexOf(query) !== -1) return true;
+              }
+            }
+            return false;
+          } catch (e) { return false; }
+        });
+      }
+
       function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
       function highlight(text, q) { if (!q) return esc(text); try { const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\\]\]/g,'\\$&') + ')','ig'); return esc(text).replace(re, '<span class="highlight">$1</span>'); } catch (e) { return esc(text); } }
 
-      tables.forEach(tbl => {
+  visibleTables.forEach(tbl => {
         const item = document.createElement('div');
         item.className = 'meta-item';
         const rawTname = tbl && tbl.name ? String(tbl.name) : '(unnamed)';
