@@ -1347,12 +1347,44 @@
   const searchBox = document.getElementById('node-search');
   ul.innerHTML = '';
       const nodeSet = new Set(nodesList.map(n => n.id));
-      // Always sort by number of immediate children (ascending). Fallback to label.
-      const sorted = [...nodesList].sort((a,b) => {
+      // Sort by number of levels (subtree depth) ascending. Fallback to label.
+      const depthMemo = new Map();
+      function computeDepth(nodeId, ancestors = new Set()) {
+        if (depthMemo.has(nodeId)) return depthMemo.get(nodeId);
+        // detect cycles
+        if (ancestors.has(nodeId)) {
+          depthMemo.set(nodeId, 1);
+          return 1;
+        }
+        ancestors.add(nodeId);
         try {
-          const ca = (childrenMap.get(a.id) || []).length;
-          const cb = (childrenMap.get(b.id) || []).length;
-          if (ca !== cb) return ca - cb;
+          const kids = (childrenMap.get(nodeId) || []).filter(k => nodeSet.has(k));
+          if (!kids.length) {
+            depthMemo.set(nodeId, 1);
+            ancestors.delete(nodeId);
+            return 1;
+          }
+          let maxChildDepth = 0;
+          for (const k of kids) {
+            const d = computeDepth(k, ancestors);
+            if (d > maxChildDepth) maxChildDepth = d;
+          }
+          const val = 1 + maxChildDepth;
+          depthMemo.set(nodeId, val);
+          ancestors.delete(nodeId);
+          return val;
+        } catch (e) {
+          try { ancestors.delete(nodeId); } catch(_){}
+          depthMemo.set(nodeId, 1);
+          return 1;
+        }
+      }
+
+      const sorted = [...nodesList].sort((a, b) => {
+        try {
+          const da = computeDepth(a.id);
+          const db = computeDepth(b.id);
+          if (da !== db) return da - db;
         } catch (e) { /* ignore */ }
         return a.label.localeCompare(b.label);
       });
