@@ -3623,7 +3623,7 @@
 
     // Boot sequence: ensure section files are preloaded and window.SECTIONS is
     // populated before we run the main init logic. This avoids icon flicker and
-    // race conditions where drawing happens before section status is known.
+    // xxx race conditions where drawing happens before section status is known.
     async function bootApp() {
       try {
         // preload sections referenced in feedData (populates window.SECTIONS / __loadedSections)
