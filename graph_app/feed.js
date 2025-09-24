@@ -12,13 +12,6 @@ window.feedData = {
 			{ id: '8', label: 'MatrixReduce' },
 			{ id: '9', label: 'RandomWalk' },
 			{ id: '10', label: 'PrimeGen' },
-			{ id: '13', label: 'QuickSelect' },
-			{ id: '14', label: 'MonteCarlo' },
-			{ id: '15', label: 'CycleDetect' },
-			{ id: '16', label: 'BackProp' },
-			{ id: '17', label: 'TopoSort' },
-			{ id: '18', label: 'WeightedSum' },
-			{ id: '20', label: 'RoutePlan' },
 		],
 		NodeLogic: `function quicksort(arr)
 		if len(arr) <= 1 return arr
@@ -71,7 +64,10 @@ window.feedData = {
 	SignalBoost: {
 		id: '5',
 		label: 'SignalBoost',
-		children: [{ id: '18', label: 'WeightedSum' }],
+		children: [
+			{ id: '18', label: 'WeightedSum' },
+			{ id: '18', label: 'WeightedSum' },
+		],
 		NodeLogic: `function boost(signal, factor)
 		for i in 0..len(signal)-1
 			signal[i] := signal[i] * factor
