@@ -83,6 +83,8 @@
       cursor: pointer;
       font-size: 14px;
     }
+    /* Hide the Circular tab visually while keeping DOM/JS intact */
+    #tab-circular { display: none !important; }
     /* Hover affordance for tabs: subtle brighten and lift */
     .tab-btn:hover {
       background: linear-gradient(180deg, #11202b, #0f1b26);
@@ -338,7 +340,7 @@
       <!-- Tab header -->
         <div class="tabs" role="tablist" aria-label="Graph views">
         <button id="tab-circular" class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-circular">Circular</button>
-        <button id="tab-layered" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-layered">Layered</button>
+  <button id="tab-layered" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-layered">Graph</button>
     <button id="tab-node-logic" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-node-logic">Section</button>
     <button id="tab-node-meta" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-node-meta">Tables</button>
   <button id="tab-dictionary" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-dictionary">Dictionary</button>
@@ -385,7 +387,7 @@
                 <div class="inner-header" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
                   <div style="display:flex; align-items:center; gap:8px;">
                     <button class="accordion-toggle" id="toggle-logic-primary" aria-expanded="false" title="Toggle" style="font-size:18px;">▸</button>
-                    <button id="heading-logic-primary" class="accordion-heading" aria-controls="node-logic-code" aria-expanded="false" style="background:transparent;border:none;color:#cfe0f5;font-size:14px;cursor:pointer;padding:6px 8px;">Pseudocode</button>
+                      <button id="heading-logic-primary" class="accordion-heading" aria-controls="node-logic-code" aria-expanded="false" style="background:transparent;border:none;color:#cfe0f5;font-size:14px;cursor:pointer;padding:6px 8px;">Logic</button>
                   </div>
                 </div>
                 <div id="node-logic-primary-content" class="inner-content" style="margin-top:8px; display:none;">
@@ -393,26 +395,11 @@
                     <button id="btn-logic-selectall-left" class="toolbar-btn small">Select All</button>
                     <button id="btn-logic-copyall-left" class="toolbar-btn small" title="Copy all pseudocode to clipboard">Copy All</button>
                   </div>
-                  <div id="node-logic-code" class="code-block">Select a node on the left to view its pseudocode.</div>
+                  <div id="node-logic-code" class="code-block">Select a node on the left to view its logic.</div>
                 </div>
               </div>
 
-              <!-- Java pane (same features as Pseudocode) -->
-              <div class="logic-inner-pane" id="node-logic-java" style="position:relative; width:100%; margin-top:12px;" data-expanded="false">
-                <div class="inner-header" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                  <div style="display:flex; align-items:center; gap:8px;">
-                    <button class="accordion-toggle" id="toggle-logic-java" aria-expanded="false" title="Toggle" style="font-size:18px;">▸</button>
-                    <button id="heading-logic-java" class="accordion-heading" aria-controls="node-logic-java-code" aria-expanded="false" style="background:transparent;border:none;color:#cfe0f5;font-size:14px;cursor:pointer;padding:6px 8px;">Java</button>
-                  </div>
-                </div>
-                <div id="node-logic-java-content" class="inner-content" style="margin-top:8px; display:none;">
-                  <div class="small-toolbar" style="margin-bottom:8px; display:flex; gap:8px; justify-content:flex-end;">
-                    <button id="btn-logic-selectall-java" class="toolbar-btn small">Select All</button>
-                    <button id="btn-logic-copyall-java" class="toolbar-btn small" title="Copy all java code to clipboard">Copy All</button>
-                  </div>
-                  <div id="node-logic-java-code" class="code-block">Select a node on the left to view its Java code.</div>
-                </div>
-              </div>
+              <!-- Java pane removed: only Logic and Notes remain -->
 
               <div class="logic-inner-pane" id="node-logic-secondary" style="position:relative; width:100%; margin-top:18px;" data-expanded="false">
                 <div class="inner-header" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
@@ -992,28 +979,31 @@
             updateNodeListIconsForSid(sid);
             return resolve();
           }
-          // fetch the raw file and try to extract status assignments
+          // Insert a script tag to load the section file. This avoids fetch() CORS restrictions
+          // because script tags are not subject to CORS the same way and will execute in-page.
           const url = `sections/section_${sid}.js?cb=${Date.now()}`;
-          fetch(url, { cache: 'no-store' }).then(r => {
-            if (!r.ok) return resolve();
-            return r.text();
-          }).then(txt => {
-            if (!txt) return resolve();
-            // look for patterns like status: 'pending' or .status = 'done'
-            const m1 = txt.match(/status\s*:\s*(['"])(pending|blocked|done)\1/i);
-            const m2 = txt.match(/\.status\s*=\s*(['"])(pending|blocked|done)\1/i);
-            const found = (m1 && m1[2]) ? m1[2] : ((m2 && m2[2]) ? m2[2] : null);
-            if (found) {
-              window.SECTIONS = window.SECTIONS || {};
-              window.__loadedSections = window.__loadedSections || {};
-              const cur = window.SECTIONS[sid] || {};
-              cur.status = String(found).toLowerCase();
-              window.SECTIONS[sid] = cur;
-              window.__loadedSections[sid] = cur;
-              updateNodeListIconsForSid(sid);
-            }
-            return resolve();
-          }).catch(() => resolve());
+          const script = document.createElement('script');
+          let finished = false;
+          function cleanupAndResolve() {
+            if (finished) return; finished = true;
+            try { if (script.parentNode) script.parentNode.removeChild(script); } catch(e){}
+            // If window.SECTIONS now has a status for this sid, record it
+            try {
+              if (!window.__loadedSections) window.__loadedSections = {};
+              if (window.SECTIONS && window.SECTIONS[sid] && typeof window.SECTIONS[sid].status === 'string') {
+                window.__loadedSections[sid] = window.SECTIONS[sid];
+                updateNodeListIconsForSid(sid);
+              }
+            } catch (e) { /* noop */ }
+            resolve();
+          }
+          script.async = true;
+          script.src = url;
+          script.onload = () => { cleanupAndResolve(); };
+          script.onerror = () => { cleanupAndResolve(); };
+          // Safety: if script doesn't load within 3s, proceed
+          const to = setTimeout(() => { try { clearTimeout(to); } catch(e){} cleanupAndResolve(); }, 3000);
+          document.head.appendChild(script);
         } catch (e) { resolve(); }
       });
       // Ensure the list's max-height/overflow are computed immediately after rendering
@@ -2492,6 +2482,15 @@
                   try {
                     const fdLocal = (window.feedData && window.feedData[id]) ? window.feedData[id] : null;
                     const numericLocal = fdLocal && fdLocal.id ? fdLocal.id : id;
+                    // Only attempt fetch when the page is served over http/https. When opened via
+                    // file:// the origin is 'null' and browsers will reject cross-origin fetches
+                    // which leads to noisy CORS errors in the console. Sections are already
+                    // loaded via script injection above, so this fetch is purely for showing
+                    // the raw source; skip it for file-based origins.
+                    const pageProtocol = (location && location.protocol) ? String(location.protocol) : '';
+                    if (pageProtocol !== 'http:' && pageProtocol !== 'https:') {
+                      return; // skip fetch when not served via http(s)
+                    }
                     const fetchUrl = `sections/section_${String(numericLocal)}.js?cb=${Date.now()}`;
                     const res = await fetch(fetchUrl, { cache: 'no-store' });
                     if (!res.ok) return;
@@ -2526,25 +2525,12 @@
               // update left-panel icons for this sid if status present
               try { updateNodeListIconsForSid(sid); } catch(e) { /* noop */ }
             }
-            // If the section provides 'logic' (pseudocode), update the Node Logic pane
+              // If the section provides 'logic' (pseudocode), update the Node Logic pane
             try {
               if (sec && typeof sec.logic === 'string') {
                 const elLogic = document.getElementById('node-logic-code');
                 if (elLogic) elLogic.textContent = sec.logic;
               }
-              // If the section provides 'java' content, populate the Java pane
-              if (sec && sec.java && typeof sec.java.logic === 'string') {
-                const elJava = document.getElementById('node-logic-java-code');
-                if (elJava) elJava.textContent = sec.java.logic;
-              } else {
-                const elJava = document.getElementById('node-logic-java-code');
-                if (elJava) elJava.textContent = 'Could not find data in the section...';
-              }
-              // set toolbar sub-labels to java.name when available
-              const javaName = (sec && sec.java && sec.java.name) ? String(sec.java.name) : '';
-              try { const s1 = document.getElementById('layered_toolbar_sub'); if (s1) s1.textContent = javaName; } catch(e){}
-              try { const s2 = document.getElementById('circular_toolbar_sub'); if (s2) s2.textContent = javaName; } catch(e){}
-              try { const s3 = document.getElementById('section_toolbar_sub'); if (s3) s3.textContent = javaName; } catch(e){}
             } catch (e) { /* noop */ }
           } catch (e) { /* noop */ }
         }
@@ -3394,37 +3380,13 @@
       const text = el ? el.textContent : '';
       copyTextToClipboard(text).then(()=>{ showCopyToast(); }).catch((err)=>{ showCopyToast('Copy failed'); console.error(err); });
     });
-    // Java pane copy/select wiring
-    const btnLogicSelectAllJava = document.getElementById('btn-logic-selectall-java');
-    const btnLogicCopyAllJava = document.getElementById('btn-logic-copyall-java');
-    if (btnLogicSelectAllJava) btnLogicSelectAllJava.addEventListener('click', (ev) => {
-      ev.stopPropagation(); ev.preventDefault();
-      const codeEl = document.getElementById('node-logic-java-code');
-      const pressed = btnLogicSelectAllJava.getAttribute('aria-pressed') === 'true';
-      if (!pressed) {
-        selectAllIn(codeEl);
-        btnLogicSelectAllJava.setAttribute('aria-pressed', 'true');
-        btnLogicSelectAllJava.textContent = 'Unselect All';
-      } else {
-        unselectAll();
-        btnLogicSelectAllJava.setAttribute('aria-pressed', 'false');
-        btnLogicSelectAllJava.textContent = 'Select All';
-      }
-    });
-    if (btnLogicCopyAllJava) btnLogicCopyAllJava.addEventListener('click', (ev) => {
-      ev.stopPropagation(); ev.preventDefault();
-      const el = document.getElementById('node-logic-java-code');
-      const text = el ? el.textContent : '';
-      copyTextToClipboard(text).then(()=>{ showCopyToast(); }).catch((err)=>{ showCopyToast('Copy failed'); console.error(err); });
-    });
+    // Java pane removed — no JS wiring needed
 
     // Accordion toggle handlers for the two logic panes. Initialize defaults according to data-expanded.
   const togglePrimary = document.getElementById('toggle-logic-primary');
   const toggleSecondary = document.getElementById('toggle-logic-secondary');
-  const toggleJava = document.getElementById('toggle-logic-java');
   const panePrimaryWrapper = document.getElementById('node-logic-primary-content');
   const paneSecondaryWrapper = document.getElementById('node-logic-secondary-content');
-  const paneJavaWrapper = document.getElementById('node-logic-java-content');
     function setPaneExpanded(toggleBtn, wrapperEl, expanded) {
       if (!toggleBtn || !wrapperEl) return;
       toggleBtn.setAttribute('aria-expanded', String(expanded));
@@ -3434,13 +3396,10 @@
     }
   if (togglePrimary) togglePrimary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = togglePrimary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(togglePrimary, panePrimaryWrapper, !cur); if (headingPrimary) headingPrimary.setAttribute('aria-expanded', String(!cur)); });
   if (toggleSecondary) toggleSecondary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = toggleSecondary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(toggleSecondary, paneSecondaryWrapper, !cur); if (headingSecondary) headingSecondary.setAttribute('aria-expanded', String(!cur)); });
-  if (toggleJava) toggleJava.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = toggleJava.getAttribute('aria-expanded') === 'true'; setPaneExpanded(toggleJava, paneJavaWrapper, !cur); if (headingJava) headingJava.setAttribute('aria-expanded', String(!cur)); });
   // Also allow the header text to toggle the pane (larger click target). Keep aria-expanded in sync.
   const headingPrimary = document.getElementById('heading-logic-primary');
   const headingSecondary = document.getElementById('heading-logic-secondary');
-  const headingJava = document.getElementById('heading-logic-java');
   if (headingPrimary) headingPrimary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = togglePrimary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(togglePrimary, panePrimaryWrapper, !cur); headingPrimary.setAttribute('aria-expanded', String(!cur)); });
-  if (headingJava) headingJava.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = toggleJava.getAttribute('aria-expanded') === 'true'; setPaneExpanded(toggleJava, paneJavaWrapper, !cur); headingJava.setAttribute('aria-expanded', String(!cur)); });
   if (headingSecondary) headingSecondary.addEventListener('click', (ev) => { ev.stopPropagation(); const cur = toggleSecondary.getAttribute('aria-expanded') === 'true'; setPaneExpanded(toggleSecondary, paneSecondaryWrapper, !cur); headingSecondary.setAttribute('aria-expanded', String(!cur)); });
     // Initialize according to data-expanded attributes on the parent panes
     try {
