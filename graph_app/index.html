@@ -1216,6 +1216,48 @@
       });
     }
 
+    // Precompute subtree depths for all nodes (uses childrenMap)
+    // This computes the maximum depth under each node (1 = leaf) and
+    // populates orderIndexMap when called so rendering can use a stable
+    // precomputed ordering on first paint.
+    function computeSubtreeDepthsForNodes(nodesList) {
+      try {
+        const nodeSet = new Set((nodesList || []).map(n => n.id));
+        const memo = new Map();
+        function depthOf(id, ancestors = new Set()) {
+          if (memo.has(id)) return memo.get(id);
+          if (ancestors.has(id)) { memo.set(id, 1); return 1; }
+          ancestors.add(id);
+          const kids = (childrenMap.get(id) || []).filter(k => nodeSet.has(k));
+          if (!kids.length) { memo.set(id, 1); ancestors.delete(id); return 1; }
+          let maxD = 0;
+          for (const k of kids) {
+            const d = depthOf(k, ancestors);
+            if (d > maxD) maxD = d;
+          }
+          const val = 1 + maxD;
+          memo.set(id, val);
+          ancestors.delete(id);
+          return val;
+        }
+        // ensure every node has a computed depth
+        for (const n of nodesList) {
+          try { depthOf(n.id); } catch (e) { memo.set(n.id, 1); }
+        }
+        // Build an ordering: nodes with smaller subtree depth first (ascending),
+        // tie-breaker: alphabetical by label
+        const sorted = [...nodesList].sort((a, b) => {
+          const da = memo.get(a.id) || 1;
+          const db = memo.get(b.id) || 1;
+          if (da !== db) return da - db; // shallower trees first
+          return a.label.localeCompare(b.label);
+        });
+        orderIndexMap = new Map();
+        sorted.forEach((n, idx) => orderIndexMap.set(n.id, idx + 1));
+        return memo;
+      } catch (e) { return new Map(); }
+    }
+
     // Distinct acyclic visits + minimal depths
     function computeDepthsAndCounts(rootId) {
       const depths = new Map();
@@ -1382,6 +1424,12 @@
 
       const sorted = [...nodesList].sort((a, b) => {
         try {
+          // If an orderIndexMap was precomputed, prefer it (stable deterministic ordering)
+          if (orderIndexMap && orderIndexMap.size) {
+            const ia = orderIndexMap.get(a.id) || 0;
+            const ib = orderIndexMap.get(b.id) || 0;
+            if (ia !== ib) return ia - ib;
+          }
           const da = computeDepth(a.id);
           const db = computeDepth(b.id);
           if (da !== db) return da - db;
@@ -3144,8 +3192,10 @@
       layoutCircle(nodes, positions);
       // capture canonical positions for reset
       saveCanonicalPositions();
-      
-      populateNodeList(nodes);
+  // Precompute subtree depths and initial ordering so the left node list
+  // appears ordered by number of levels on first paint.
+  try { computeSubtreeDepthsForNodes(nodes); } catch (e) { /* noop */ }
+  populateNodeList(nodes);
 
       // ensure circular layout canonical positions are set at load
       try { if (typeof resetCircularLayout === 'function') resetCircularLayout(); } catch (e) { /* noop */ }
